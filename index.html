@@ -5067,7 +5067,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   }
 
   function pushProfileToServer(syncNow) {
-    if (!profileHydrated) return;
+    if (!profileHydrated || String(location.search || '').includes('noprofile')) return;
     const pid = activeProfileId;
     const payload = JSON.stringify({ state, updatedAt: lastLocalSaveTs });
     if (isLocalServerOrigin()) {
