@@ -5193,6 +5193,12 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     }
   });
 
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && profileHydrated && !profileDirty && state.route !== 'test-exam' && state.route !== 'paper-live' && state.route !== 'voca-study' && !document.getElementById('etsModal')) {
+      loadProfileFromServer(activeProfileId, { renderCurrent: true });
+    }
+  }, 15000);
+
   async function fetchRemoteProfileData(id) {
     let bestData = null;
     const consider = (d) => {
