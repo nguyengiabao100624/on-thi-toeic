@@ -5016,26 +5016,133 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     return h === '127.0.0.1' || h === 'localhost' || h.startsWith('192.168.') || h.startsWith('10.');
   }
 
+  function mergeProfileStates(locObj, srvObj, srvIsNewer) {
+    const def = defaultState();
+    const older = (srvIsNewer ? locObj : srvObj) || {};
+    const newer = (srvIsNewer ? srvObj : locObj) || {};
+
+    // If a full reset happened more recently on one side, respect that reset timestamp
+    const olderReset = Number(older._resetAt) || 0;
+    const newerReset = Number(newer._resetAt) || 0;
+    if (newerReset > olderReset && newerReset > (Number(older._lastEditAt) || 0)) {
+      return newer;
+    }
+
+    const mergeTestMap = (field) => {
+      const out = {};
+      const oMap = (older.test && older.test[field]) || {};
+      const nMap = (newer.test && newer.test[field]) || {};
+      const codes = new Set([...Object.keys(oMap), ...Object.keys(nMap)]);
+      codes.forEach((c) => {
+        out[c] = { ...(oMap[c] || {}), ...(nMap[c] || {}) };
+      });
+      return out;
+    };
+
+    // Merge customWords by lowercase English word
+    const cwMap = new Map();
+    const pushCw = (arr) => {
+      if (!Array.isArray(arr)) return;
+      arr.forEach((w) => {
+        if (w && w.en) cwMap.set(String(w.en).trim().toLowerCase(), w);
+      });
+    };
+    pushCw(older.voca && older.voca.customWords);
+    pushCw(newer.voca && newer.voca.customWords);
+
+    // Merge attempts by id
+    const attMap = new Map();
+    const pushAtt = (arr) => {
+      if (!Array.isArray(arr)) return;
+      arr.forEach((a) => {
+        if (a && a.id) attMap.set(a.id, a);
+      });
+    };
+    pushAtt(older.test && older.test.attempts);
+    pushAtt(newer.test && newer.test.attempts);
+    const mergedAttempts = Array.from(attMap.values()).sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0));
+
+    // Merge mastered formula IDs
+    const fMastered = Array.from(new Set([
+      ...((older.formulas && Array.isArray(older.formulas.masteredIds)) ? older.formulas.masteredIds : []),
+      ...((newer.formulas && Array.isArray(newer.formulas.masteredIds)) ? newer.formulas.masteredIds : [])
+    ]));
+
+    return {
+      ...def,
+      ...older,
+      ...newer,
+      _resetAt: Math.max(olderReset, newerReset),
+      daily: {
+        ...def.daily,
+        ...(older.daily || {}),
+        ...(newer.daily || {}),
+        streak: Math.max(Number(older.daily && older.daily.streak) || 1, Number(newer.daily && newer.daily.streak) || 1),
+        today: {
+          ...def.daily.today,
+          ...((older.daily && older.daily.today) || {}),
+          ...((newer.daily && newer.daily.today) || {})
+        }
+      },
+      voca: {
+        ...def.voca,
+        ...(older.voca || {}),
+        ...(newer.voca || {}),
+        statuses: { ...((older.voca && older.voca.statuses) || {}), ...((newer.voca && newer.voca.statuses) || {}) },
+        bookmarks: { ...((older.voca && older.voca.bookmarks) || {}), ...((newer.voca && newer.voca.bookmarks) || {}) },
+        srs: { ...((older.voca && older.voca.srs) || {}), ...((newer.voca && newer.voca.srs) || {}) },
+        customWords: Array.from(cwMap.values()),
+        filter: {
+          ...def.voca.filter,
+          ...((older.voca && older.voca.filter) || {}),
+          ...((newer.voca && newer.voca.filter) || {})
+        }
+      },
+      test: {
+        ...def.test,
+        ...(older.test || {}),
+        ...(newer.test || {}),
+        answers: mergeTestMap('answers'),
+        checked: mergeTestMap('checked'),
+        flags: mergeTestMap('flags'),
+        notes: mergeTestMap('notes'),
+        highlights: mergeTestMap('highlights'),
+        eliminated: mergeTestMap('eliminated'),
+        attempts: mergedAttempts
+      },
+      formulas: {
+        ...def.formulas,
+        ...(older.formulas || {}),
+        ...(newer.formulas || {}),
+        masteredIds: fMastered,
+        drillAnswers: {
+          ...((older.formulas && older.formulas.drillAnswers) || {}),
+          ...((newer.formulas && newer.formulas.drillAnswers) || {})
+        }
+      }
+    };
+  }
+
   function pushProfileToCloud(pid, payloadStr, syncNow) {
     const uuid = CLOUD_PROFILE_UUIDS[pid];
     if (!uuid) return Promise.resolve(false);
     const url = `https://textdb.dev/api/data/${uuid}`;
     if (syncNow && navigator.sendBeacon) {
       try {
-        const sent = navigator.sendBeacon(url, new Blob([payloadStr], { type: 'text/plain;charset=UTF-8' }));
+        const sent = navigator.sendBeacon(url, new Blob([payloadStr], { type: 'text/plain' }));
         if (sent) return Promise.resolve(true);
       } catch (e) {}
     }
     return fetch(url, {
       method: 'POST',
       keepalive: !!syncNow,
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      headers: { 'Content-Type': 'text/plain' },
       body: payloadStr
     }).then((r) => r.ok).catch(() => false);
   }
 
   function pushProfileToServer(syncNow) {
-    if (!profileHydrated || String(location.search || '').includes('noprofile')) return;
+    if (String(location.search || '').includes('noprofile')) return;
     const pid = activeProfileId;
     const payload = JSON.stringify({ state, updatedAt: lastLocalSaveTs });
     if (isLocalServerOrigin()) {
@@ -5059,22 +5166,21 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       cloudSyncTimer = setTimeout(() => {
         pushProfileToCloud(pid, JSON.stringify({ state, updatedAt: lastLocalSaveTs }), false)
           .then((ok) => { if (ok) profileDirty = false; });
-      }, 650);
+      }, 150);
     }
   }
 
   function saveState() {
     lastLocalSaveTs = Date.now();
+    state._lastEditAt = lastLocalSaveTs;
     profileDirty = true;
     try {
       const json = JSON.stringify(state);
       localStorage.setItem(getProfileStorageKey(activeProfileId), json);
       localStorage.setItem(getProfileStorageKey(activeProfileId) + '_ts', String(lastLocalSaveTs));
     } catch (e) { /* storage quota guard */ }
-    if (profileHydrated) {
-      if (profileSyncTimer) clearTimeout(profileSyncTimer);
-      profileSyncTimer = setTimeout(() => pushProfileToServer(false), 320);
-    }
+    if (profileSyncTimer) clearTimeout(profileSyncTimer);
+    profileSyncTimer = setTimeout(() => pushProfileToServer(false), 120);
   }
 
   window.addEventListener('pagehide', () => {
@@ -5133,7 +5239,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const id = PROFILE_USERS[pid] ? pid : 'bao';
     try {
       const data = await fetchRemoteProfileData(id);
-      if (!data) {
+      if (!data || !data.state) {
         profileHydrated = true;
         return;
       }
@@ -5141,24 +5247,37 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       const srvTs = Number(data && data.updatedAt) || 0;
       const locTs = Number(localStorage.getItem(getProfileStorageKey(id) + '_ts') || 0);
       const locRaw = localStorage.getItem(getProfileStorageKey(id));
-      if (data && data.state && (!locRaw || (opts.forceServer && srvTs >= locTs) || srvTs > locTs)) {
-        applyStateObjectInPlace(data.state);
-        try {
-          const json = JSON.stringify(state);
-          localStorage.setItem(getProfileStorageKey(id), json);
-          localStorage.setItem(getProfileStorageKey(id) + '_ts', String(srvTs || Date.now()));
-        } catch (e) {}
-        profileHydrated = true;
-        profileDirty = false;
-        applyThemeAndBilingual();
-        renderNavState();
-        if (opts.renderCurrent) {
-          const safeRoute = (state.route === 'test-result') ? 'test-hub' : (state.route || 'home');
-          navigate(safeRoute);
-        }
-      } else {
-        profileHydrated = true;
-        if (locRaw && locTs > srvTs) pushProfileToServer(false);
+      let locObj = null;
+      try { if (locRaw) locObj = JSON.parse(locRaw); } catch (e) {}
+
+      const srvIsNewer = !locObj || srvTs >= locTs;
+      const mergedState = locObj ? mergeProfileStates(locObj, data.state, srvIsNewer) : data.state;
+      const prevRoute = state.route;
+      applyStateObjectInPlace(mergedState);
+      if (opts.keepCurrentRoute && prevRoute) state.route = prevRoute;
+
+      const finalTs = Math.max(srvTs, locTs, Date.now());
+      lastLocalSaveTs = finalTs;
+      try {
+        const json = JSON.stringify(state);
+        localStorage.setItem(getProfileStorageKey(id), json);
+        localStorage.setItem(getProfileStorageKey(id) + '_ts', String(finalTs));
+      } catch (e) {}
+
+      profileHydrated = true;
+      profileDirty = false;
+      applyThemeAndBilingual();
+      renderNavState();
+      if (opts.renderCurrent) {
+        const safeRoute = (state.route === 'test-result') ? 'test-hub' : (state.route || 'home');
+        navigate(safeRoute);
+      }
+
+      // If local had additional items that were merged into server state, push merged state back to cloud
+      const srvSum = computeProfileSummaryFromState(id, data.state);
+      const mrgSum = computeProfileSummaryFromState(id, state);
+      if (mrgSum.mastered > srvSum.mastered || mrgSum.answered > srvSum.answered || mrgSum.attempts > srvSum.attempts) {
+        pushProfileToServer(false);
       }
     } catch (e) {
       profileHydrated = true;
@@ -6400,7 +6519,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const tc = document.getElementById('toastContainer');
     if (tc) tc.replaceChildren();
     state.route = route;
-    saveState();
+    try {
+      if (profileHydrated && localStorage.getItem(getProfileStorageKey(activeProfileId))) {
+        localStorage.setItem(getProfileStorageKey(activeProfileId), JSON.stringify(state));
+      }
+    } catch (e) {}
     applyThemeAndBilingual();
     renderNavState();
     const fn = viewRenderers[route];
@@ -6904,12 +7027,14 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       onConfirm: async () => {
         const fresh = defaultState();
         const tsNow = Date.now();
+        fresh._resetAt = tsNow;
+        fresh._lastEditAt = tsNow;
         try {
-          localStorage.removeItem(getProfileStorageKey(activeProfileId));
-          localStorage.removeItem(getProfileStorageKey(activeProfileId) + '_ts');
+          localStorage.setItem(getProfileStorageKey(activeProfileId), JSON.stringify(fresh));
+          localStorage.setItem(getProfileStorageKey(activeProfileId) + '_ts', String(tsNow));
           localStorage.removeItem(STORAGE_KEY);
         } catch (e) {}
-        if (isHttpOrigin()) {
+        if (isLocalServerOrigin()) {
           try {
             await fetch(`/api/profile?id=${encodeURIComponent(activeProfileId)}`, {
               method: 'POST',
@@ -6918,6 +7043,9 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
             });
           } catch (e) {}
         }
+        try {
+          await pushProfileToCloud(activeProfileId, JSON.stringify({ state: fresh, updatedAt: tsNow }), true);
+        } catch (e) {}
         location.reload();
       }
     });
@@ -7182,10 +7310,9 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
     let hasPickedProfile = false;
     try { hasPickedProfile = !!localStorage.getItem(PROFILE_KEY); } catch (e) {}
+    loadProfileFromServer(activeProfileId, { renderCurrent: true });
     if (!hasPickedProfile && !String(location.search || '').includes('noprofile')) {
       setTimeout(() => openProfileSwitcherModal(true), 80);
-    } else if (isHttpOrigin() || CLOUD_GIST_ID) {
-      loadProfileFromServer(activeProfileId, { renderCurrent: true });
     }
   }
 
