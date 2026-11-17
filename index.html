@@ -5010,22 +5010,56 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   };
   const CLOUD_GIST_ID = 'cf1da5e7595edc3d7c3a0d6151cc0dca';
   let cloudSyncTimer = null;
+  let inFlightCloudPushes = 0;
 
   function isLocalServerOrigin() {
     const h = String(location.hostname || '').toLowerCase();
     return h === '127.0.0.1' || h === 'localhost' || h.startsWith('192.168.') || h.startsWith('10.');
   }
 
+  function getPersistableRoute(r) {
+    if (r === 'voca-study') return 'voca-hub';
+    if (r === 'test-practice' || r === 'test-exam' || r === 'test-result' || r === 'paper-live') return 'test-hub';
+    const allowed = ['home', 'voca-hub', 'test-hub', 'formulas', 'notebook', 'paper-exam', 'omr-scan'];
+    return allowed.includes(r) ? r : 'home';
+  }
+
+  function serializeStateForStorage(stObj) {
+    const s = stObj || state;
+    return JSON.stringify({ ...s, route: getPersistableRoute(s.route) });
+  }
+
+  function getStateSyncFingerprint(stObj) {
+    const s = stObj || {};
+    return JSON.stringify({
+      theme: s.theme || 'light',
+      bilingual: !!s.bilingual,
+      vStatuses: (s.voca && s.voca.statuses) || {},
+      vBookmarks: (s.voca && s.voca.bookmarks) || {},
+      vCustom: ((s.voca && s.voca.customWords) || []).length,
+      tAnswers: (s.test && s.test.answers) || {},
+      tChecked: (s.test && s.test.checked) || {},
+      tFlags: (s.test && s.test.flags) || {},
+      tNotes: (s.test && s.test.notes) || {},
+      tAttempts: ((s.test && s.test.attempts) || []).length,
+      fMastered: (s.formulas && s.formulas.masteredIds) || [],
+      fDrills: (s.formulas && s.formulas.drillAnswers) || {},
+      daily: (s.daily && s.daily.today) || {},
+      streak: (s.daily && s.daily.streak) || 1,
+    });
+  }
+
   function mergeProfileStates(locObj, srvObj, srvIsNewer) {
     const def = defaultState();
     const older = (srvIsNewer ? locObj : srvObj) || {};
     const newer = (srvIsNewer ? srvObj : locObj) || {};
+    const preservedRoute = (locObj && locObj.route) || state.route || 'home';
 
     // If a full reset happened more recently on one side, respect that reset timestamp
     const olderReset = Number(older._resetAt) || 0;
     const newerReset = Number(newer._resetAt) || 0;
     if (newerReset > olderReset && newerReset > (Number(older._lastEditAt) || 0)) {
-      return newer;
+      return { ...newer, route: preservedRoute };
     }
 
     const mergeTestMap = (field) => {
@@ -5072,6 +5106,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       ...def,
       ...older,
       ...newer,
+      route: preservedRoute,
       _resetAt: Math.max(olderReset, newerReset),
       daily: {
         ...def.daily,
@@ -5133,18 +5168,28 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         if (sent) return Promise.resolve(true);
       } catch (e) {}
     }
+    inFlightCloudPushes++;
     return fetch(url, {
       method: 'POST',
       keepalive: !!syncNow,
       headers: { 'Content-Type': 'text/plain' },
       body: payloadStr
-    }).then((r) => r.ok).catch(() => false);
+    })
+      .then((r) => r.ok)
+      .catch(() => false)
+      .finally(() => {
+        inFlightCloudPushes = Math.max(0, inFlightCloudPushes - 1);
+      });
   }
 
   function pushProfileToServer(syncNow) {
     if (String(location.search || '').includes('noprofile')) return;
+    if (profileSyncTimer) { clearTimeout(profileSyncTimer); profileSyncTimer = null; }
+    if (cloudSyncTimer) { clearTimeout(cloudSyncTimer); cloudSyncTimer = null; }
     const pid = activeProfileId;
-    const payload = JSON.stringify({ state, updatedAt: lastLocalSaveTs });
+    const pushTs = lastLocalSaveTs;
+    const safeStateObj = { ...state, route: getPersistableRoute(state.route) };
+    const payload = JSON.stringify({ state: safeStateObj, updatedAt: pushTs });
     if (isLocalServerOrigin()) {
       if (syncNow && navigator.sendBeacon) {
         try {
@@ -5158,16 +5203,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         }).catch(() => {});
       }
     }
-    if (syncNow) {
-      if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
-      pushProfileToCloud(pid, payload, true).then((ok) => { if (ok) profileDirty = false; });
-    } else {
-      if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
-      cloudSyncTimer = setTimeout(() => {
-        pushProfileToCloud(pid, JSON.stringify({ state, updatedAt: lastLocalSaveTs }), false)
-          .then((ok) => { if (ok) profileDirty = false; });
-      }, 150);
-    }
+    pushProfileToCloud(pid, payload, !!syncNow).then((ok) => {
+      if (ok && lastLocalSaveTs <= pushTs) {
+        profileDirty = false;
+      }
+    });
   }
 
   function saveState() {
@@ -5175,12 +5215,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     state._lastEditAt = lastLocalSaveTs;
     profileDirty = true;
     try {
-      const json = JSON.stringify(state);
+      const json = serializeStateForStorage(state);
       localStorage.setItem(getProfileStorageKey(activeProfileId), json);
       localStorage.setItem(getProfileStorageKey(activeProfileId) + '_ts', String(lastLocalSaveTs));
     } catch (e) { /* storage quota guard */ }
     if (profileSyncTimer) clearTimeout(profileSyncTimer);
-    profileSyncTimer = setTimeout(() => pushProfileToServer(false), 120);
+    profileSyncTimer = setTimeout(() => {
+      profileSyncTimer = null;
+      pushProfileToServer(false);
+    }, 150);
   }
 
   window.addEventListener('pagehide', () => {
@@ -5188,13 +5231,13 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && profileHydrated && state.route !== 'test-exam' && state.route !== 'paper-live') {
+    if (document.visibilityState === 'visible' && profileHydrated && !profileDirty && inFlightCloudPushes === 0 && !['test-exam', 'paper-live', 'voca-study', 'test-practice'].includes(state.route)) {
       loadProfileFromServer(activeProfileId, { renderCurrent: true });
     }
   });
 
   setInterval(() => {
-    if (document.visibilityState === 'visible' && profileHydrated && !profileDirty && state.route !== 'test-exam' && state.route !== 'paper-live' && state.route !== 'voca-study' && !document.getElementById('etsModal')) {
+    if (document.visibilityState === 'visible' && profileHydrated && !profileDirty && inFlightCloudPushes === 0 && !['test-exam', 'paper-live', 'voca-study', 'test-practice'].includes(state.route) && !document.getElementById('etsModal')) {
       loadProfileFromServer(activeProfileId, { renderCurrent: true });
     }
   }, 15000);
@@ -5243,6 +5286,10 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   async function loadProfileFromServer(pid, opts = {}) {
     const id = PROFILE_USERS[pid] ? pid : 'bao';
+    if (!opts.forceServer && (profileDirty || inFlightCloudPushes > 0 || profileSyncTimer || cloudSyncTimer)) {
+      return;
+    }
+    const editTsAtStart = lastLocalSaveTs;
     try {
       const data = await fetchRemoteProfileData(id);
       if (!data || !data.state) {
@@ -5250,22 +5297,31 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         return;
       }
       if (id !== activeProfileId) return;
+      if (!opts.forceServer && (profileDirty || inFlightCloudPushes > 0 || lastLocalSaveTs !== editTsAtStart)) {
+        return;
+      }
       const srvTs = Number(data && data.updatedAt) || 0;
       const locTs = Number(localStorage.getItem(getProfileStorageKey(id) + '_ts') || 0);
       const locRaw = localStorage.getItem(getProfileStorageKey(id));
       let locObj = null;
       try { if (locRaw) locObj = JSON.parse(locRaw); } catch (e) {}
 
-      const srvIsNewer = !locObj || srvTs >= locTs;
-      const mergedState = locObj ? mergeProfileStates(locObj, data.state, srvIsNewer) : data.state;
-      const prevRoute = state.route;
-      applyStateObjectInPlace(mergedState);
-      if (opts.keepCurrentRoute && prevRoute) state.route = prevRoute;
+      const activeRouteBeforeLoad = state.route || 'home';
+      const prevFp = getStateSyncFingerprint(state);
 
-      const finalTs = Math.max(srvTs, locTs, Date.now());
+      const srvIsNewer = !locObj || srvTs > locTs;
+      const mergedState = locObj ? mergeProfileStates(locObj, data.state, srvIsNewer) : { ...data.state, route: activeRouteBeforeLoad };
+      applyStateObjectInPlace(mergedState);
+      // Never allow cloud sync to hijack the user's current route on this device
+      state.route = activeRouteBeforeLoad;
+
+      const nextFp = getStateSyncFingerprint(state);
+      const dataChanged = prevFp !== nextFp;
+
+      const finalTs = Math.max(srvTs, locTs, lastLocalSaveTs);
       lastLocalSaveTs = finalTs;
       try {
-        const json = JSON.stringify(state);
+        const json = serializeStateForStorage(state);
         localStorage.setItem(getProfileStorageKey(id), json);
         localStorage.setItem(getProfileStorageKey(id) + '_ts', String(finalTs));
       } catch (e) {}
@@ -5274,9 +5330,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       profileDirty = false;
       applyThemeAndBilingual();
       renderNavState();
-      if (opts.renderCurrent) {
-        const safeRoute = (state.route === 'test-result') ? 'test-hub' : (state.route || 'home');
+
+      const isInteractiveSession = ['voca-study', 'test-practice', 'test-exam', 'test-result', 'paper-live', 'omr-scan'].includes(state.route);
+      if (opts.renderCurrent && (opts.forceServer || (dataChanged && !isInteractiveSession && !document.getElementById('etsModal')))) {
+        const savedScrollY = window.scrollY || 0;
+        const safeRoute = isInteractiveSession ? getPersistableRoute(state.route) : (state.route || 'home');
         navigate(safeRoute);
+        if (!opts.forceServer) {
+          window.scrollTo(0, savedScrollY);
+        }
       }
 
       // If local had additional items that were merged into server state, push merged state back to cloud
@@ -5297,6 +5359,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   async function selectProfile(pid, keepRoute = true) {
     const nextId = PROFILE_USERS[pid] ? pid : 'bao';
+    const prevRoute = getPersistableRoute(state.route || 'home');
     if (profileDirty && profileHydrated) pushProfileToServer(true);
     closeHubSettings();
     transientResetHooks.forEach((fn) => { try { fn(); } catch (e) {} });
@@ -5313,9 +5376,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     closeModal();
     applyThemeAndBilingual();
     renderNavState();
-    const safeRoute = keepRoute
-      ? ((state.route === 'test-result') ? 'test-hub' : (state.route || 'home'))
-      : (state.route || 'home');
+    const safeRoute = keepRoute ? prevRoute : getPersistableRoute(state.route || 'home');
     navigate(safeRoute);
     await loadProfileFromServer(nextId, { forceServer: true, renderCurrent: true });
     toast(`Đang học với hồ sơ: ${PROFILE_USERS[nextId].name}`);
@@ -6527,7 +6588,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     state.route = route;
     try {
       if (profileHydrated && localStorage.getItem(getProfileStorageKey(activeProfileId))) {
-        localStorage.setItem(getProfileStorageKey(activeProfileId), JSON.stringify(state));
+        localStorage.setItem(getProfileStorageKey(activeProfileId), serializeStateForStorage(state));
       }
     } catch (e) {}
     applyThemeAndBilingual();
