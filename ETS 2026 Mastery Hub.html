@@ -5004,65 +5004,33 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     } catch (e) {}
   })();
 
+  const CLOUD_PROFILE_UUIDS = {
+    bao: '8f4b2e19-7c3a-4d91-b862-15e9c0a47d21',
+    anh: '2876e83e-0f30-463e-afba-72d66d112064'
+  };
   const CLOUD_GIST_ID = 'cf1da5e7595edc3d7c3a0d6151cc0dca';
-  const CLOUD_SYNC_STORAGE_KEY = 'ets_cloud_sync_key';
-  let cloudGistSyncTimer = null;
-
-  function getCloudSyncKey() {
-    try { return (localStorage.getItem(CLOUD_SYNC_STORAGE_KEY) || '').trim(); } catch (e) { return ''; }
-  }
-
-  function setCloudSyncKey(rawVal) {
-    let v = String(rawVal || '').trim();
-    const m = v.match(/[#?&]sync=([^&#\s]+)/i);
-    if (m) v = decodeURIComponent(m[1]).trim();
-    try {
-      if (v) localStorage.setItem(CLOUD_SYNC_STORAGE_KEY, v);
-      else localStorage.removeItem(CLOUD_SYNC_STORAGE_KEY);
-    } catch (e) {}
-    return v;
-  }
-
-  // Auto-pair Cloud Sync if URL contains #sync=... and immediately scrub it from address bar
-  (function captureUrlSyncHash() {
-    try {
-      const h = String(location.hash || '');
-      const m = h.match(/[#&?]sync=([^&#\s]+)/i);
-      if (m && m[1]) {
-        const key = decodeURIComponent(m[1]).trim();
-        if (key.length >= 10) {
-          localStorage.setItem(CLOUD_SYNC_STORAGE_KEY, key);
-          if (window.history && window.history.replaceState) {
-            window.history.replaceState(null, '', location.pathname + location.search);
-          }
-          setTimeout(() => toast('☁️ Đã kết nối Đồng bộ Đám mây 24/7 trên thiết bị này!'), 400);
-        }
-      }
-    } catch (e) {}
-  })();
+  let cloudSyncTimer = null;
 
   function isLocalServerOrigin() {
     const h = String(location.hostname || '').toLowerCase();
     return h === '127.0.0.1' || h === 'localhost' || h.startsWith('192.168.') || h.startsWith('10.');
   }
 
-  function pushProfileToCloudGist(pid, payloadStr, keepalive) {
-    const syncKey = getCloudSyncKey();
-    if (!syncKey || !CLOUD_GIST_ID) return Promise.resolve(false);
-    const fname = `${pid}.json`;
-    return fetch(`https://api.github.com/gists/${CLOUD_GIST_ID}`, {
-      method: 'PATCH',
-      keepalive: !!keepalive,
-      headers: {
-        'Authorization': `token ${syncKey}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        files: {
-          [fname]: { content: payloadStr }
-        }
-      })
+  function pushProfileToCloud(pid, payloadStr, syncNow) {
+    const uuid = CLOUD_PROFILE_UUIDS[pid];
+    if (!uuid) return Promise.resolve(false);
+    const url = `https://textdb.dev/api/data/${uuid}`;
+    if (syncNow && navigator.sendBeacon) {
+      try {
+        const sent = navigator.sendBeacon(url, new Blob([payloadStr], { type: 'text/plain;charset=UTF-8' }));
+        if (sent) return Promise.resolve(true);
+      } catch (e) {}
+    }
+    return fetch(url, {
+      method: 'POST',
+      keepalive: !!syncNow,
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: payloadStr
     }).then((r) => r.ok).catch(() => false);
   }
 
@@ -5083,19 +5051,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         }).catch(() => {});
       }
     }
-    if (getCloudSyncKey()) {
-      if (syncNow) {
-        if (cloudGistSyncTimer) clearTimeout(cloudGistSyncTimer);
-        pushProfileToCloudGist(pid, payload, true).then((ok) => { if (ok) profileDirty = false; });
-      } else {
-        if (cloudGistSyncTimer) clearTimeout(cloudGistSyncTimer);
-        cloudGistSyncTimer = setTimeout(() => {
-          pushProfileToCloudGist(pid, JSON.stringify({ state, updatedAt: lastLocalSaveTs }), false)
-            .then((ok) => { if (ok) profileDirty = false; });
-        }, 1200);
-      }
+    if (syncNow) {
+      if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
+      pushProfileToCloud(pid, payload, true).then((ok) => { if (ok) profileDirty = false; });
     } else {
-      profileDirty = false;
+      if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
+      cloudSyncTimer = setTimeout(() => {
+        pushProfileToCloud(pid, JSON.stringify({ state, updatedAt: lastLocalSaveTs }), false)
+          .then((ok) => { if (ok) profileDirty = false; });
+      }, 650);
     }
   }
 
@@ -5117,46 +5081,56 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     if (profileDirty && profileHydrated) pushProfileToServer(true);
   });
 
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && profileHydrated && state.route !== 'test-exam' && state.route !== 'paper-live') {
+      loadProfileFromServer(activeProfileId, { renderCurrent: true });
+    }
+  });
+
   async function fetchRemoteProfileData(id) {
+    let bestData = null;
+    const consider = (d) => {
+      if (!d || !d.state) return;
+      const ts = Number(d.updatedAt) || 0;
+      if (!bestData || ts >= (Number(bestData.updatedAt) || 0)) bestData = d;
+    };
     if (isLocalServerOrigin()) {
       try {
         const resp = await fetch(`/api/profile?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
-        if (resp.ok) return await resp.json();
+        if (resp.ok) consider(await resp.json());
       } catch (e) {}
     }
-    if (CLOUD_GIST_ID) {
+    const uuid = CLOUD_PROFILE_UUIDS[id];
+    if (uuid) {
       try {
-        const headers = { 'Accept': 'application/vnd.github+json' };
-        const syncKey = getCloudSyncKey();
-        if (syncKey) headers['Authorization'] = `token ${syncKey}`;
-        const resp = await fetch(`https://api.github.com/gists/${CLOUD_GIST_ID}?t=${Date.now()}`, {
-          cache: 'no-store',
-          headers
-        });
+        const resp = await fetch(`https://textdb.dev/api/data/${uuid}?t=${Date.now()}`, { cache: 'no-store' });
         if (resp.ok) {
-          const gist = await resp.json();
-          const fileObj = gist && gist.files && gist.files[`${id}.json`];
-          if (fileObj && fileObj.content) {
-            return JSON.parse(fileObj.content);
-          }
+          const txt = await resp.text();
+          if (txt && txt.trim().startsWith('{')) consider(JSON.parse(txt));
         }
       } catch (e) {}
     }
-    if (isHttpOrigin()) {
+    if (!bestData && CLOUD_GIST_ID) {
       try {
-        const resp = await fetch(`user_profiles/${encodeURIComponent(id)}.json?t=${Date.now()}`, { cache: 'no-store' });
-        if (resp.ok) return await resp.json();
+        const resp = await fetch(`https://api.github.com/gists/${CLOUD_GIST_ID}?t=${Date.now()}`, { cache: 'no-store' });
+        if (resp.ok) {
+          const gist = await resp.json();
+          const fileObj = gist && gist.files && gist.files[`${id}.json`];
+          if (fileObj && fileObj.content) consider(JSON.parse(fileObj.content));
+        }
       } catch (e) {}
     }
-    return null;
+    if (!bestData && isHttpOrigin()) {
+      try {
+        const resp = await fetch(`user_profiles/${encodeURIComponent(id)}.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (resp.ok) consider(await resp.json());
+      } catch (e) {}
+    }
+    return bestData;
   }
 
   async function loadProfileFromServer(pid, opts = {}) {
     const id = PROFILE_USERS[pid] ? pid : 'bao';
-    if (!isHttpOrigin() && !CLOUD_GIST_ID) {
-      profileHydrated = true;
-      return;
-    }
     try {
       const data = await fetchRemoteProfileData(id);
       if (!data) {
@@ -5281,102 +5255,24 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     });
   }
 
-  function saveCloudSyncFromModal() {
-    const inp = document.getElementById('etsCloudSyncKeyInp');
-    const val = inp ? inp.value : '';
-    const saved = setCloudSyncKey(val);
-    if (saved) {
-      toast('☁️ Đã bật Đồng bộ Đám mây 24/7! Đang đồng bộ dữ liệu...');
-      loadProfileFromServer(activeProfileId, { forceServer: true, renderCurrent: true })
-        .then(() => {
-          pushProfileToServer(true);
-          openProfileSwitcherModal(false);
-        });
-    } else {
-      toast('Đã ngắt mã đồng bộ đám mây trên thiết bị này.');
-      openProfileSwitcherModal(false);
-    }
-  }
-
-  function copyCloudSyncLink() {
-    const k = getCloudSyncKey();
-    if (!k) return;
-    const url = `${location.origin}${location.pathname}#sync=${encodeURIComponent(k)}`;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(() => {
-        toast('📋 Đã copy Link Đồng Bộ! Gửi link này sang điện thoại/máy tính khác và bấm mở 1 lần là tự động đồng bộ 24/7!');
-      }).catch(() => {});
-    }
-  }
-
-  function syncCloudNow() {
-    toast('🔄 Đang đồng bộ dữ liệu đám mây...');
-    loadProfileFromServer(activeProfileId, { forceServer: true, renderCurrent: true }).then(() => {
-      pushProfileToServer(true);
-      toast('✅ Đã đồng bộ dữ liệu mới nhất thành công!');
-    });
-  }
-
   function openProfileSwitcherModal(isFirstVisit) {
-    const hasKey = !!getCloudSyncKey();
     openModal(`
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <strong style="font-size:1.0667rem;">${icon('user')} Chọn Hồ Sơ Người Học</strong>
         <button class="btn btn-sm" onclick="ETS.closeModal()">${icon('close')} Đóng</button>
       </div>
-      <p style="font-size:0.8667rem;color:var(--ink-muted);margin:0 0 12px;">
-        Mỗi người có tiến độ 1.600 từ vựng, lịch sử làm đề, ghi chú &amp; chứng chỉ riêng — đồng bộ tự động 24/7 qua GitHub Cloud kể cả khi tắt máy tính.
+      <p style="font-size:0.8667rem;color:var(--ink-muted);margin:0 0 14px;">
+        Mỗi người có tiến độ 1.600 từ vựng, lịch sử làm đề, ghi chú &amp; chứng chỉ riêng — tự động lưu và đồng bộ đám mây 24/7 trên mọi thiết bị.
       </p>
       <div id="profileChooserCards" class="profile-chooser-grid">
         ${renderProfileCardsHtml(getLocalProfilesSummaries())}
       </div>
-      <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:0.8rem;font-weight:800;color:${hasKey ? 'var(--success)' : 'var(--primary)'};">
-            ☁️ Đồng bộ Đám mây 24/7: ${hasKey ? 'ĐANG BẬT (Tự động lưu 2 chiều)' : 'Chế độ Đọc Cloud (Nhập mã để lưu 2 chiều)'}
-          </span>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${hasKey ? `<button type="button" class="btn btn-xs btn-soft" onclick="ETS.copyCloudSyncLink()">📋 Copy Link Mở Trên Máy Khác</button>` : ''}
-            <button type="button" class="btn btn-xs" onclick="ETS.syncCloudNow()">🔄 Đồng bộ ngay</button>
-          </div>
-        </div>
-        ${!hasKey ? `
-          <div style="display:flex;gap:6px;margin-top:8px;">
-            <input id="etsCloudSyncKeyInp" type="password" class="input" style="flex:1;padding:5px 9px;font-size:0.8rem;" placeholder="Dán Link Đồng Bộ hoặc Mã Cloud Sync để bật lưu 2 chiều...">
-            <button type="button" class="btn btn-xs btn-primary" onclick="ETS.saveCloudSyncFromModal()">Kích hoạt</button>
-          </div>
-        ` : ''}
-      </div>
     `, { closeable: !isFirstVisit });
-    if (isLocalServerOrigin()) {
-      fetch('/api/profiles', { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          const box = document.getElementById('profileChooserCards');
-          if (box && d && Array.isArray(d.profiles)) box.innerHTML = renderProfileCardsHtml(d.profiles);
-        }).catch(() => {});
-    } else if (CLOUD_GIST_ID) {
-      const headers = { 'Accept': 'application/vnd.github+json' };
-      const syncKey = getCloudSyncKey();
-      if (syncKey) headers['Authorization'] = `token ${syncKey}`;
-      fetch(`https://api.github.com/gists/${CLOUD_GIST_ID}?t=${Date.now()}`, { cache: 'no-store', headers })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((gist) => {
-          if (!gist || !gist.files) return;
-          const list = ['bao', 'anh'].map((id) => {
-            try {
-              const f = gist.files[`${id}.json`];
-              if (f && f.content) {
-                const parsed = JSON.parse(f.content);
-                if (parsed && parsed.state) return computeProfileSummaryFromState(id, parsed.state);
-              }
-            } catch (e) {}
-            return computeProfileSummaryFromState(id, null);
-          });
-          const box = document.getElementById('profileChooserCards');
-          if (box) box.innerHTML = renderProfileCardsHtml(list);
-        }).catch(() => {});
-    }
+    Promise.all(['bao', 'anh'].map((id) => fetchRemoteProfileData(id).then((d) => computeProfileSummaryFromState(id, d && d.state))))
+      .then((list) => {
+        const box = document.getElementById('profileChooserCards');
+        if (box && Array.isArray(list)) box.innerHTML = renderProfileCardsHtml(list);
+      }).catch(() => {});
   }
 
   function trackDailyProgress(type, amount = 1) {
@@ -7304,7 +7200,6 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     lookupWordInDb, quickSaveLookedUpWord, saveHighlightedWordDirect, openModal, closeModal, openImageLightbox, showVocaLookupModal,
     openAddCustomWordModal, saveCustomWordFromModal, openGoalSettingsModal, saveGoalSettings,
     selectProfile, openProfileSwitcherModal, getActiveProfile, registerTransientReset,
-    saveCloudSyncFromModal, copyCloudSyncLink, syncCloudNow,
     hideSelectionPopover, openFormulaWrongDrill,
     toggleVocaBookmark, setTheme, toggleTheme, setFontScale, stepFontScale, toggleBilingual, applyThemeAndBilingual,
     registerView, navigate, exportBackup, importBackup, resetAllData, init,
