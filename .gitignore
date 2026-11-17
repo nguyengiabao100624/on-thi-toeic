@@ -1,0 +1,17 @@
+# Raw PDF Books & Full Merged Audio (Not needed by Web App)
+PDF Full (10 Tests)/
+Audio Full (10 Tests)/
+LISTENING ETS 2026.pdf
+READING ETS 2026..pdf
+TRANSCRIPT.pdf
+PHI/
+VOCA/*.pdf
+VOCA/PDF Ghep (LC + RC)/
+VOCA/LC_VOCA-TEST_*.mp3
+VOCA/RC_VOCA-TEST_*.mp3
+web_assets/pages/
+web_assets/test01_pages/
+web_assets/transcripts/
+web_assets/test01_transcript/
+*.jpg
+!web_assets/**/*.jpg
