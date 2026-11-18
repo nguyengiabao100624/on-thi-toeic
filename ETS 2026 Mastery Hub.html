@@ -3816,7 +3816,8 @@ body.theme-dark .ets-booklet-page-img {
 
 /* 4. Sprint 30/11 Crash-Course Center */
 .sprint-hero:not(.card) {
-  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 52%, #0f766e 100%);
+  background-color: #1e3a8a;
+  background-image: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 52%, #0f766e 100%);
   color: #fff;
   border-radius: 18px;
   padding: 22px 24px;
@@ -3827,6 +3828,27 @@ body.theme-dark .ets-booklet-page-img {
   gap: 18px;
   flex-wrap: wrap;
   box-shadow: 0 14px 32px -12px rgba(30, 58, 138, 0.38);
+}
+.btn-hero-white {
+  background: #ffffff;
+  color: #1e3a8a;
+  border-color: #ffffff;
+  font-weight: 800;
+}
+.btn-hero-white:hover {
+  background: #eff6ff;
+  color: #1e3a8a;
+  border-color: #ffffff;
+}
+.btn-hero-ghost {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.38);
+}
+.btn-hero-ghost:hover {
+  background: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.75);
 }
 .sprint-hero.card {
   padding: 20px 22px;
@@ -7769,8 +7791,8 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           <h2 style="margin:0 0 6px;font-size:clamp(1.25rem,2.2vw,1.6rem);font-weight:900;line-height:1.25;">Trung Tâm Ôn Cấp Tốc 30/11 · Tăng Tốc Điểm Thực Chiến</h2>
           <p style="margin:0 0 12px;font-size:0.9rem;opacity:0.94;line-height:1.52;">Luyện phản xạ Part 5 20s/câu, 60 cặp Paraphrase kinh điển Part 3–4–7, bẫy câu hỏi gián tiếp Part 2 và lộ trình 12 ngày chuẩn hóa theo đề ETS 2026 &amp; 2025.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-sm" style="background:#fff;color:#1e3a8a;border-color:#fff;font-weight:800;" onclick="ETS.navigate('sprint')">${icon('zap')} Vào Ôn Cấp Tốc 30/11 ${icon('arrow-right')}</button>
-            <button class="btn btn-sm" style="background:rgba(255,255,255,0.14);color:#fff;border-color:rgba(255,255,255,0.35);" onclick="ETS.setTestSeries && ETS.setTestSeries('2025'); ETS.navigate('test-hub');">${icon('tests')} Mở Bộ Đề ETS 2025 (10 Tests)</button>
+            <button class="btn btn-sm btn-hero-white" onclick="ETS.navigate('sprint')">${icon('zap')} Vào Ôn Cấp Tốc 30/11 ${icon('arrow-right')}</button>
+            <button class="btn btn-sm btn-hero-ghost" onclick="ETS.setTestSeries && ETS.setTestSeries('2025'); ETS.navigate('test-hub');">${icon('tests')} Mở Bộ Đề ETS 2025 (10 Tests)</button>
           </div>
         </div>
         <div class="sprint-countdown-pill">
@@ -8555,7 +8577,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         const matchPack = selTests.includes(v.testCode) || (isCust && selTests.includes('CUSTOM'));
         if (!matchPack) return false;
       }
-      if (f.section !== 'ALL' && v.section !== f.section) return false;
+      if (f.section === 'PHRASE') {
+        const isPhr = String(v.en || '').trim().includes(' ') || v.section === 'Cụm Từ Đã Lưu';
+        if (!isPhr) return false;
+      } else if (f.section === 'CUSTOM_ALL') {
+        const isCustOrSaved = String(v.uid).startsWith('CUSTOM_') || String(v.uid).startsWith('CUST_') || v.testCode === 'CUSTOM' || !!state.voca.bookmarks[v.uid];
+        if (!isCustOrSaved) return false;
+      } else if (f.section !== 'ALL' && v.section !== f.section) {
+        return false;
+      }
       const st = state.voca.statuses[v.uid] || 'unseen';
       if (f.status === 'UNSEEN' && st !== 'unseen') return false;
       if (f.status === 'LEARNING' && st !== 'learning') return false;
@@ -8739,7 +8769,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     root.innerHTML = `
       <div class="view-header">
         <div>
-          <h2 class="view-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${icon('voca')} VOCA Studio 2.0 <span class="badge badge-primary">1.600 Từ Có Audio Tách Riêng</span></h2>
+          <h2 class="view-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${icon('voca')} VOCA Studio 2.0 <span class="badge badge-primary">${customCount > 0 ? `${total.toLocaleString('vi-VN')} Từ & Cụm Từ` : '1.600 Từ Có Audio Tách Riêng'}</span></h2>
         </div>
         <button class="btn ${f.shuffle ? 'btn-primary' : ''}" id="hubShuffleBtn" onclick="ETS.toggleVocaShuffle()">
           ${icon('shuffle')} Đảo ngẫu nhiên: <strong>${f.shuffle ? 'ĐANG BẬT' : 'TẮT'}</strong>
@@ -8822,9 +8852,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           id: 'csVocaSection',
           value: f.section,
           options: [
-            { value: 'ALL', label: 'Cả LC + RC' },
+            { value: 'ALL', label: 'Tất cả Từ & Cụm từ' },
             { value: 'LC', label: 'Chỉ LC (Listening)' },
             { value: 'RC', label: 'Chỉ RC (Reading)' },
+            { value: 'PHRASE', label: 'Cụm từ & Collocations' },
+            { value: 'CUSTOM_ALL', label: 'Từ & Cụm từ Của Tôi' },
           ],
           onChangeJs: "ETS.setVocaFilter('section', '__VAL__')"
         })}
@@ -9330,9 +9362,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
                 id: 'csSetupSection',
                 value: setupDraft.section,
                 options: [
-                  { value: 'ALL', label: 'Cả LC + RC' },
+                  { value: 'ALL', label: 'Tất cả Từ & Cụm từ' },
                   { value: 'LC', label: 'Chỉ LC (Listening)' },
                   { value: 'RC', label: 'Chỉ RC (Reading)' },
+                  { value: 'PHRASE', label: 'Cụm từ & Collocations' },
+                  { value: 'CUSTOM_ALL', label: 'Từ & Cụm từ Của Tôi' },
                 ],
                 extraStyle: 'width:100%;',
                 onChangeJs: "ETS.setVocaSetupField('section', '__VAL__')"
@@ -9629,6 +9663,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   // ===================== FLASHCARD 1 (SRS INTRA-SESSION REQUEUE) =====================
   function fcFlipCard() {
     if (!ses) return;
+    if (window.getSelection && window.getSelection().toString().trim().length > 0) return;
     const card = currentStudyWord();
     if (!card) return;
     ses.isFlipped = !ses.isFlipped;
@@ -9812,6 +9847,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   function answerClozeChoice(pickedUid) {
     if (!ses || ses.clozeChoice) return;
+    if (window.getSelection && window.getSelection().toString().trim().length > 0) return;
     const target = currentStudyWord();
     if (!target) return;
     ses.clozeChoice = pickedUid;
@@ -9878,6 +9914,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   function answerQuiz(pickedUid) {
     if (!ses || ses.quizChoice) return;
+    if (window.getSelection && window.getSelection().toString().trim().length > 0) return;
     const target = currentStudyWord();
     if (!target) return;
     ses.quizChoice = pickedUid;
@@ -11025,17 +11062,36 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   function collectAllLoadedItems(filterFn) {
     const out = [];
-    if (Array.isArray(DB.test01) && DB.test01.length === 200) {
-      DB.test01.forEach((it) => { if (filterFn(it, 'T01')) out.push({ ...it, _testCode: 'T01' }); });
-    }
+    const scanArr = (arr, tc) => {
+      if (!Array.isArray(arr)) return;
+      const grpAssets = {};
+      arr.forEach((x) => {
+        if (x && x.group_id && !grpAssets[x.group_id]) {
+          grpAssets[x.group_id] = {
+            graphicImg: x.graphicImg || null,
+            passageImgs: (x.passageImgs && x.passageImgs.length) ? x.passageImgs : null,
+          };
+        }
+      });
+      arr.forEach((it) => {
+        if (filterFn(it, tc)) {
+          const ga = (it.group_id && grpAssets[it.group_id]) || {};
+          out.push({
+            ...it,
+            _testCode: tc,
+            graphicImg: it.graphicImg || ga.graphicImg || null,
+            passageImgs: (it.passageImgs && it.passageImgs.length) ? it.passageImgs : (ga.passageImgs || []),
+          });
+        }
+      });
+    };
+    if (Array.isArray(DB.test01) && DB.test01.length === 200) scanArr(DB.test01, 'T01');
     const map210 = DB.tests02To10 || {};
-    Object.keys(map210).sort().forEach((tc) => {
-      (map210[tc] || []).forEach((it) => { if (filterFn(it, tc)) out.push({ ...it, _testCode: tc }); });
-    });
+    Object.keys(map210).sort().forEach((tc) => scanArr(map210[tc], tc));
     const extraTests = DB.tests || {};
     Object.keys(extraTests).sort().forEach((tc) => {
       if (tc === 'T01' || map210[tc]) return;
-      (extraTests[tc] || []).forEach((it) => { if (filterFn(it, tc)) out.push({ ...it, _testCode: tc }); });
+      scanArr(extraTests[tc], tc);
     });
     return out;
   }
@@ -11111,24 +11167,34 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
     if (mode === 'mistakes') {
       const diag = computeDiagnosticStats();
-      const wrongKeys = new Set(diag.partWrongItems.map((w) => `${w.testCode}_${w.q}`));
-      let pool = collectAllLoadedItems((it, tc) => wrongKeys.has(`${tc}_${it.q}`) && (it.part === 2 || it.part === 5) && it.options);
-      if (!pool.length) {
-        toast('Bạn chưa có câu sai Part 2/5 nào tồn đọng — Đã mở 15 câu Part 5 Bẫy Nâng Cao để rèn luyện!');
-        pool = shuffleArr(collectAllLoadedItems((it) => it && it.part === 5 && it.stem_en)).slice(0, 15);
-      } else {
-        pool = shuffleArr(pool).slice(0, 20);
-      }
-      spSes = {
-        mode: 'mistakes',
-        title: '🩹 Phẫu Thuật Dứt Điểm Câu Từng Làm Sai',
-        items: pool,
-        idx: 0,
-        picked: null,
-        rightCount: 0,
-        finished: false,
+      const neededCodes = Array.from(new Set(diag.partWrongItems.map((w) => w.testCode).filter(Boolean)));
+      const launchMistakesPool = () => {
+        const wrongKeys = new Set(diag.partWrongItems.map((w) => `${w.testCode}_${w.q}`));
+        let pool = collectAllLoadedItems((it, tc) => wrongKeys.has(`${tc}_${it.q}`) && it && it.options);
+        if (!pool.length) {
+          toast('Bạn chưa có câu sai nào tồn đọng — Đã mở 15 câu Part 5 Trọng Tâm để rèn luyện!');
+          pool = shuffleArr(collectAllLoadedItems((it) => it && it.part === 5 && it.stem_en)).slice(0, 15);
+        } else {
+          pool = shuffleArr(pool).slice(0, 20);
+        }
+        spSes = {
+          mode: 'mistakes',
+          title: '🩹 Phẫu Thuật Dứt Điểm Câu Từng Làm Sai',
+          items: pool,
+          idx: 0,
+          picked: null,
+          showScript: false,
+          rightCount: 0,
+          finished: false,
+        };
+        ETS.navigate('sprint-drill');
+        if (pool[0] && pool[0].audio) playWordAudio(pool[0].audio, '', 1.0);
       };
-      ETS.navigate('sprint-drill');
+      if (ETS.ensureTestLoaded && neededCodes.length) {
+        Promise.all(neededCodes.map((c) => ETS.ensureTestLoaded(c))).then(launchMistakesPool);
+      } else {
+        launchMistakesPool();
+      }
       return;
     }
 
@@ -11206,6 +11272,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   function answerSprintItem(choice) {
     if (!spSes || spSes.picked) return;
+    if (choice !== 'TIMEOUT' && window.getSelection && window.getSelection().toString().trim().length > 0) return;
     clearSprintTimers();
     spSes.picked = choice;
     spSes.elapsedMs = spSes.questionStartMs ? (Date.now() - spSes.questionStartMs) : 0;
@@ -11239,6 +11306,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   function flipPpCard() {
     if (!spSes || spSes.mode !== 'pp_card') return;
+    if (window.getSelection && window.getSelection().toString().trim().length > 0) return;
     spSes.flipped = !spSes.flipped;
     const cur = spSes.items[spSes.idx];
     if (cur) {
@@ -11589,12 +11657,14 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       return;
     }
 
-    // 3. Part 5 Speed Blitz / Part 2 Trap / Mistake Surgery
+    // 3. Part 5 Speed Blitz / Part 2 Trap / Mistake Surgery (Parts 1-7)
+    const isP1 = cur.part === 1;
     const isP2 = cur.part === 2;
     const optKeys = isP2 ? ['A', 'B', 'C'] : ['A', 'B', 'C', 'D'];
     const answered = !!spSes.picked;
-    const revealP2 = !isP2 || answered || spSes.showScript;
-    const cleanStemEn = String(cur.stem_en || '').replace(/(-{3,}|_{3,})/g, '_______');
+    const revealAudioOpts = !(isP1 || isP2) || answered || spSes.showScript;
+    const rawStem = String(cur.stem_en || '');
+    const stemHtml = esc(rawStem.replace(/(-{3,}|_{3,})/g, '___BLANK___')).replace(/___BLANK___/g, '<span class="ets-p6-blank-slot">_______</span>');
 
     root.innerHTML = `
       <div class="study-shell">
@@ -11611,27 +11681,32 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
             <span class="badge badge-accent">${esc(cur._testCode || 'ETS')} · Part ${cur.part} · Câu ${cur.q}</span>
-            <div style="display:flex;gap:6px;">
-              ${cur.audio ? `<button type="button" class="btn btn-xs btn-primary" onclick="ETS.playWordAudio('${escJsStr(cur.audio)}', '', 1.0)">${icon('volume')} Phát lại Audio ETS</button>` : ''}
-              ${isP2 && !answered ? `<button type="button" class="btn btn-xs" onclick="ETS.toggleSprintP2Script()">${icon('eye')} ${spSes.showScript ? 'Ẩn Script' : 'Gợi ý Script'}</button>` : ''}
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              ${cur.audio ? `<button type="button" class="btn btn-xs btn-primary" onclick="ETS.playWordAudio('${escJsStr(cur.audio)}', '', 1.0)">${icon('volume')} Phát Audio ETS</button>` : ''}
+              ${(isP1 || isP2) && !answered ? `<button type="button" class="btn btn-xs" onclick="ETS.toggleSprintP2Script()">${icon('eye')} ${spSes.showScript ? 'Ẩn Script' : 'Gợi ý Script'}</button>` : ''}
+              ${cur._testCode && (cur.part === 3 || cur.part === 4 || cur.part === 6 || cur.part === 7) ? `<button type="button" class="btn btn-xs" onclick="ETS.launchTestPractice('${escJsStr(cur._testCode)}', { part: ${cur.part}, startQ: ${cur.q} })">${icon('external-link')} Mở đoạn gốc trong Phòng Đề →</button>` : ''}
             </div>
           </div>
 
-          ${isP2 ? (revealP2 ? `
+          ${cur.photo ? `<div style="text-align:center;margin-bottom:12px;"><img src="${esc(cur.photo)}" alt="Part 1 Photo" style="max-width:100%;max-height:260px;border-radius:10px;border:1px solid var(--border);"></div>` : ''}
+          ${cur.graphicImg ? `<div style="text-align:center;margin-bottom:12px;"><img src="${esc(cur.graphicImg)}" alt="Graphic" style="max-width:100%;max-height:240px;border-radius:10px;border:1px solid var(--border);"></div>` : ''}
+          ${(cur.passageImgs && cur.passageImgs.length) ? `<div style="margin-bottom:12px;max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:6px;background:var(--surface-2);">${cur.passageImgs.map((u) => `<img src="${esc(u)}" alt="Passage" style="width:100%;height:auto;border-radius:6px;margin-bottom:6px;display:block;">`).join('')}</div>` : ''}
+
+          ${isP2 ? (revealAudioOpts ? `
             <div style="padding:12px 14px;border-radius:10px;background:var(--surface-2);margin-bottom:12px;">
-              <div style="font-size:1.08rem;font-weight:800;">Q: ${esc(cleanStemEn)}</div>
+              <div style="font-size:1.08rem;font-weight:800;">Q: ${stemHtml}</div>
               ${cur.stem_vi ? `<div class="vi-text" style="margin-top:6px;">${esc(cur.stem_vi)}</div>` : ''}
-              <div style="font-size:0.82rem;color:var(--primary);margin-top:6px;font-weight:700;">💡 ${esc(detectP2QuestionType(cleanStemEn))}</div>
+              <div style="font-size:0.82rem;color:var(--primary);margin-top:6px;font-weight:700;">💡 ${esc(detectP2QuestionType(rawStem))}</div>
             </div>
           ` : `
             <div class="p2-listen-banner" style="margin-bottom:12px;">
               <span class="p2-listen-icon">${icon('headphones')}</span>
               <div class="p2-listen-text"><strong>Nghe kỹ từ đầu tiên của câu hỏi!</strong> Loại ngay phương án lặp từ đồng âm (Similar Sound) hoặc Yes/No nếu là câu hỏi Wh-.</div>
             </div>
-          `) : `
-            <div style="font-size:1.12rem;font-weight:700;line-height:1.65;margin-bottom:12px;">${esc(cleanStemEn)}</div>
+          `) : (rawStem ? `
+            <div style="font-size:1.12rem;font-weight:700;line-height:1.65;margin-bottom:12px;">${stemHtml}</div>
             ${answered && cur.stem_vi ? `<div class="vi-text" style="margin-bottom:12px;">${esc(cur.stem_vi)}</div>` : ''}
-          `}
+          ` : '')}
 
           <div class="opt-list">
             ${optKeys.map((k) => {
@@ -11648,7 +11723,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
                 <div role="button" tabindex="0" class="${cls}" onclick="ETS.answerSprintItem('${k}')">
                   <span class="opt-key">${k}</span>
                   <div style="flex:1;min-width:0;">
-                    <div>${revealP2 ? esc(oEn) : `Phương án ${k} (Nghe Audio)`}</div>
+                    <div>${revealAudioOpts ? esc(oEn) : `Phương án (${k}) — Nghe Audio`}</div>
                     ${answered && oVi ? `<div class="opt-vi">${esc(oVi)}</div>` : ''}
                   </div>
                 </div>
@@ -14627,7 +14702,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     if (!att) return;
     latestResultAttempt = att;
     selectedResultQ = 0;
-    ETS.navigate('test-result');
+    if (ETS.ensureTestLoaded && att.testCode) {
+      ETS.ensureTestLoaded(att.testCode).then(() => ETS.navigate('test-result'));
+    } else {
+      ETS.navigate('test-result');
+    }
   }
 
   let resultMatrixFilter = 'all';
@@ -16080,7 +16159,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
                 ` : ''}
 
                 <div class="q-stem" style="margin-bottom:10px;">
-                  <div style="font-weight:700;color:var(--ink);">${esc(pq.stem_en)}</div>
+                  <div style="font-weight:700;color:var(--ink);">${esc(String(pq.stem_en || '').replace(/(-{3,}|_{3,})/g, '___BLANK___')).replace(/___BLANK___/g, '<span class="ets-p6-blank-slot">_______</span>')}</div>
                   ${showVi && pq.stem_vi ? `<div class="vi-text" style="margin-top:5px;"><strong>Dịch câu:</strong> ${esc(pq.stem_vi)}</div>` : ''}
                 </div>
 
@@ -16121,7 +16200,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
                   <div class="exp-box" style="margin-top:12px;">
                     ${pq.formula ? `
                       <div style="padding:8px 12px;border-radius:8px;background:var(--warn-soft);border-left:4px solid var(--warn);margin-bottom:8px;font-size:0.8667rem;">
-                        <strong style="color:#b45309;display:inline-flex;align-items:center;gap:5px;">${icon('formulas')} Công thức & Quy tắc cốt lõi:</strong> ${esc(pq.formula)}
+                        <strong style="color:var(--warn);display:inline-flex;align-items:center;gap:5px;">${icon('formulas')} Công thức & Quy tắc cốt lõi:</strong> ${esc(pq.formula)}
                       </div>
                     ` : ''}
                     <div style="font-size:0.9rem;line-height:1.65;">
@@ -16595,7 +16674,8 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     parts.push(`<svg id="omrPrintableSvg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW} ${svgH}" width="100%" height="100%" style="display:block;background:#fff;">`);
 
     // Compact Official Header matching real IIG top band proportions (sections 10-13 omitted)
-    parts.push(`<text x="115" y="64" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="800" fill="#0f172a">ETS 2026 TOEIC — PHIẾU TÔ ĐÁP ÁN CHUẨN IIG (1:1)</text>`);
+    const seriesTitle = String(code).startsWith('E25_') ? 'ETS 2025 (VOL.4) TOEIC' : 'ETS 2026 (VOL.5) TOEIC';
+    parts.push(`<text x="115" y="64" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="800" fill="#0f172a">${seriesTitle} — PHIẾU TÔ ĐÁP ÁN CHUẨN IIG (1:1)</text>`);
     parts.push(`<text x="115" y="86" font-family="Inter,Arial,sans-serif" font-size="11.5" font-weight="600" fill="#475569">Test: ${ETS.esc(code)}  |  Kích thước khung thật 145.9 × 95.6 mm trên giấy A4  |  Chỉ chấm 200 ô Listening &amp; Reading (lược bỏ mục 10–13)</text>`);
     parts.push(`<rect x="115" y="102" width="380" height="34" rx="4" fill="none" stroke="#94a3b8" stroke-width="1.1"/>`);
     parts.push(`<text x="128" y="123" font-family="Inter,Arial,sans-serif" font-size="12" fill="#334155">Name: ____________________________________</text>`);
@@ -18489,18 +18569,18 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   function getTestSelectOptions() {
     const meta = (ETS.DB && ETS.DB.testsMeta) || (window.__ETS_DATA__ && window.__ETS_DATA__.testsMeta) || {};
-    const ids = Array.isArray(meta)
-      ? meta.map((m) => m.id)
-      : Object.keys(meta).sort();
-    if (!ids.length) {
+    const rawList = Array.isArray(meta) ? meta : Object.keys(meta).sort().map((k) => meta[k] || { id: k });
+    if (!rawList.length) {
       return Array.from({ length: 10 }, (_, i) => {
         const id = `T${i + 1 < 10 ? '0' + (i + 1) : i + 1}`;
         return { value: id, label: `${id} — ETS 2026 Full 200 Câu` };
       });
     }
-    return ids.map((id) => {
-      const m = Array.isArray(meta) ? meta.find((x) => x.id === id) : meta[id];
-      return { value: id, label: (m && m.name) ? m.name : `${id} — ETS 2026 Full 200 Câu` };
+    return rawList.map((m) => {
+      const id = m.code || m.id || 'T01';
+      const is25 = String(id).startsWith('E25_');
+      const fallback = is25 ? `${id} — ETS 2025 (Vol.4) Full 200 Câu` : `${id} — ETS 2026 (Vol.5) Full 200 Câu`;
+      return { value: id, label: m.title || m.name || fallback };
     });
   }
 
@@ -18567,6 +18647,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   function setPaperTestCode(val) {
     paperState.testCode = val;
+    if (ETS.ensureTestLoaded) ETS.ensureTestLoaded(val);
     renderPaperExamView(val);
   }
 
@@ -18626,10 +18707,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     };
 
     const parts = [];
+    const bookletSeries = String(code).startsWith('E25_') ? 'ETS 2025 (VOL.4) TOEIC' : 'ETS 2026 (VOL.5) TOEIC';
     parts.push(`
       <div style="border-bottom:2px solid #0f172a;padding-bottom:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;">
         <div>
-          <div style="font-size:16pt;font-weight:800;letter-spacing:-0.02em;">ETS 2026 TOEIC — CLEAN EXAM BOOKLET</div>
+          <div style="font-size:16pt;font-weight:800;letter-spacing:-0.02em;">${bookletSeries} — CLEAN EXAM BOOKLET</div>
           <div style="font-size:9.5pt;color:#475569;">Test Code: <b>${ETS.esc(code)}</b> &bull; 200 Questions (English-only print edition — mark answers on your OMR sheet)</div>
         </div>
         <div style="font-size:9.5pt;font-weight:700;border:1px solid #0f172a;padding:3px 10px;border-radius:4px;">TEST ${ETS.esc(code)}</div>
@@ -18666,8 +18748,12 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         return;
       }
 
-      if ((pNum === 3 || pNum === 4) && first.graphicDoc && ETS.renderGraphicDoc) {
+      if ((pNum === 3 || pNum === 4) && first.graphicImg) {
+        parts.push(`<div class="ets-print-passage" style="text-align:center;"><img src="${ETS.esc(first.graphicImg)}" alt="Graphic Q${first.q}" style="max-width:360px;max-height:240px;object-fit:contain;border:1px solid #cbd5e1;border-radius:4px;"></div>`);
+      } else if ((pNum === 3 || pNum === 4) && first.graphicDoc && ETS.renderGraphicDoc) {
         parts.push(`<div class="ets-print-passage">${ETS.renderGraphicDoc(first.graphicDoc)}</div>`);
+      } else if ((pNum === 6 || pNum === 7) && Array.isArray(first.passageImgs) && first.passageImgs.length) {
+        parts.push(`<div class="ets-print-passage">${first.passageImgs.map((u) => `<img src="${ETS.esc(u)}" alt="Passage Q${first.q}" style="width:100%;max-width:660px;height:auto;display:block;margin:0 auto 6px;border:1px solid #cbd5e1;border-radius:4px;">`).join('')}</div>`);
       } else if (pNum === 6 && ETS.renderPart6Document) {
         parts.push(`<div class="ets-print-passage">${ETS.renderPart6Document(first, grp, 'exam', code, 0, false, {})}</div>`);
       } else if (pNum === 7 && ETS.linesToDocBlocks && ETS.renderExamDocument) {
@@ -18693,24 +18779,31 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   function printPaperBooklet(testCode) {
     const code = testCode || paperState.testCode || 'T01';
-    const existing = document.getElementById('etsPrintableBooklet');
-    if (existing) existing.remove();
-    const div = document.createElement('div');
-    div.id = 'etsPrintableBooklet';
-    div.className = 'ets-print-booklet';
-    div.innerHTML = buildPaperBookletHtml(code);
-    document.body.appendChild(div);
+    const doPrint = () => {
+      const existing = document.getElementById('etsPrintableBooklet');
+      if (existing) existing.remove();
+      const div = document.createElement('div');
+      div.id = 'etsPrintableBooklet';
+      div.className = 'ets-print-booklet';
+      div.innerHTML = buildPaperBookletHtml(code);
+      document.body.appendChild(div);
 
-    document.body.classList.remove('print-result-mode');
-    document.body.classList.add('print-booklet-mode');
-    const cleanup = () => {
-      document.body.classList.remove('print-booklet-mode');
-      const el = document.getElementById('etsPrintableBooklet');
-      if (el) el.remove();
+      document.body.classList.remove('print-result-mode');
+      document.body.classList.add('print-booklet-mode');
+      const cleanup = () => {
+        document.body.classList.remove('print-booklet-mode');
+        const el = document.getElementById('etsPrintableBooklet');
+        if (el) el.remove();
+      };
+      window.addEventListener('afterprint', cleanup, { once: true });
+      window.print();
+      setTimeout(cleanup, 1200);
     };
-    window.addEventListener('afterprint', cleanup, { once: true });
-    window.print();
-    setTimeout(cleanup, 1200);
+    if (ETS.ensureTestLoaded) {
+      ETS.ensureTestLoaded(code).then(doPrint);
+    } else {
+      doPrint();
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -19137,7 +19230,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     renderOmrScannerView();
   }
 
-  function setOmrTestCode(val) { omrState.testCode = val; renderOmrScannerView(); }
+  function setOmrTestCode(val) {
+    omrState.testCode = val;
+    if (ETS.ensureTestLoaded) ETS.ensureTestLoaded(val);
+    renderOmrScannerView();
+  }
   function setOmrFilter(mode) { const s = captureOmrScroll(); omrState.filterMode = mode; renderOmrScannerView({ preserveScroll: s }); }
   function toggleOmrWarpedPreview() { const s = captureOmrScroll(); omrState.showWarped = !omrState.showWarped; renderOmrScannerView({ preserveScroll: s }); }
   function toggleOmrAnswer(q, letter) {
