@@ -12350,8 +12350,8 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   function buildAudioMenuPopoverHtml() {
     return `
       <div class="menu-popover" id="wsAudioMenuPopover">
-        <button class="menu-item" onclick="ETS.nudgePracticeAudio(-3)"><span>${icon('chevron-left')} Tua lùi 3 giây</span></button>
-        <button class="menu-item" onclick="ETS.nudgePracticeAudio(3)"><span>${icon('chevron-right')} Tua tới 3 giây</span></button>
+        <button class="menu-item" onclick="ETS.nudgePracticeAudio(-3)"><span>${icon('chevron-left')} Tua lùi 3 giây</span><span style="font-size:0.74rem;font-weight:700;color:var(--ink-subtle);">Phím A</span></button>
+        <button class="menu-item" onclick="ETS.nudgePracticeAudio(3)"><span>${icon('chevron-right')} Tua tới 3 giây</span><span style="font-size:0.74rem;font-weight:700;color:var(--ink-subtle);">Phím D</span></button>
         <div style="padding:6px 10px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:2px 0;">
           <div style="font-size:0.7333rem;font-weight:800;color:var(--ink-subtle);margin-bottom:4px;">TỐC ĐỘ PHÁT (${ws.playbackRate}x)</div>
           <div style="display:flex;gap:4px;">
@@ -13632,10 +13632,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         <table class="rich-table shortcuts-table">
           <thead><tr><th>Phím</th><th>Chức năng</th></tr></thead>
           <tbody>
-            <tr><td><strong>1 / 2 / 3 / 4</strong> hoặc <strong>A / B / C / D</strong></td><td>Chọn nhanh đáp án A, B, C, D cho câu hiện tại</td></tr>
+            <tr><td><strong>A / D</strong></td><td>Tua lùi <strong>3 giây</strong> / Tua tới <strong>3 giây</strong> Audio (chế độ Luyện đề)</td></tr>
+            <tr><td><strong>Space</strong> (Phím cách)</td><td>Phát / Tạm dừng Audio (trong chế độ Luyện tập)</td></tr>
+            <tr><td><strong>1 / 2 / 3 / 4</strong></td><td>Chọn nhanh đáp án A, B, C, D cho câu hiện tại</td></tr>
             <tr><td><strong>Chuột phải vào đáp án</strong> hoặc nút <strong>[X]</strong></td><td>Gạch loại phương án nhiễu (Strikethrough Elimination)</td></tr>
             <tr><td><strong>← / →</strong> (Mũi tên Trái / Phải)</td><td>Chuyển sang Câu / Nhóm câu trước hoặc tiếp theo (Khóa khi đang nghe Thi thật)</td></tr>
-            <tr><td><strong>Space</strong> (Phím cách)</td><td>Phát / Tạm dừng Audio (trong chế độ Luyện tập)</td></tr>
             <tr><td><strong>F</strong></td><td>Cắm cờ / Bỏ cờ đánh dấu câu hiện tại</td></tr>
             <tr><td><strong>R</strong></td><td>Luyện lại câu / nhóm câu hiện tại (chế độ Luyện tập)</td></tr>
             <tr><td><strong>V</strong></td><td>Bật / Tắt chế độ Song ngữ Anh – Việt</td></tr>
@@ -14497,7 +14498,27 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   }
   function nudgePracticeAudio(sec) {
     if (!ws || ws.mode !== 'practice') return;
-    persistentTestAudio.currentTime = Math.max(0, Math.min(persistentTestAudio.duration || 9999, (persistentTestAudio.currentTime || 0) + sec));
+    const sc = currentScreen();
+    if (!sc || !sc.audio) return;
+    if (persistentTestAudio.dataset.loadedSrc !== sc.audio) {
+      attachWorkspaceAudio(true);
+    }
+    const dur = Number.isFinite(persistentTestAudio.duration) && persistentTestAudio.duration > 0
+      ? persistentTestAudio.duration
+      : 9999;
+    const nextTime = Math.max(0, Math.min(dur, (persistentTestAudio.currentTime || 0) + sec));
+    persistentTestAudio.currentTime = nextTime;
+    ws.audioCurrent = nextTime;
+    if (Number.isFinite(persistentTestAudio.duration) && persistentTestAudio.duration > 0) {
+      const pct = (nextTime / persistentTestAudio.duration) * 100;
+      const rng = document.getElementById('wsAudioRange');
+      const tm = document.getElementById('wsAudioTime');
+      if (rng) {
+        rng.value = pct;
+        rng.style.setProperty('--audio-pct', `${pct.toFixed(1)}%`);
+      }
+      if (tm) tm.textContent = `${fmtTime(nextTime)}/${fmtTime(persistentTestAudio.duration)}`;
+    }
   }
   function setPlaybackRate(r) {
     if (!ws) return;
@@ -15134,23 +15155,39 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   document.addEventListener('keydown', (e) => {
     if (!ws || (state.route !== 'test-practice' && state.route !== 'test-exam')) return;
     if (document.getElementById('etsModal')) return;
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes((document.activeElement && document.activeElement.tagName) || '')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const ae = document.activeElement;
+    const tag = (ae && ae.tagName) || '';
+    if (
+      tag === 'TEXTAREA' ||
+      tag === 'SELECT' ||
+      (ae && ae.isContentEditable) ||
+      (tag === 'INPUT' && !['range', 'checkbox', 'radio', 'button'].includes(String(ae.type || '').toLowerCase()))
+    ) {
+      return;
+    }
     if (e.code === 'ArrowLeft') { e.preventDefault(); stepScreen(-1); }
     else if (e.code === 'ArrowRight') { e.preventDefault(); stepScreen(1); }
     else if (e.code === 'Space' && ws.mode === 'practice') {
       const sc = currentScreen();
       if (sc && sc.audio) { e.preventDefault(); togglePracticeAudio(); }
-    } else if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey) {
+    } else if ((e.code === 'KeyA' || e.key === 'a' || e.key === 'A') && ws.mode === 'practice') {
+      const sc = currentScreen();
+      if (sc && sc.audio) { e.preventDefault(); nudgePracticeAudio(-3); }
+    } else if ((e.code === 'KeyD' || e.key === 'd' || e.key === 'D') && ws.mode === 'practice') {
+      const sc = currentScreen();
+      if (sc && sc.audio) { e.preventDefault(); nudgePracticeAudio(3); }
+    } else if (e.key === 'f' || e.key === 'F') {
       const sc = currentScreen();
       if (sc) { e.preventDefault(); toggleFlag(sc.qStart); }
-    } else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && ws.mode === 'practice') {
+    } else if ((e.key === 'r' || e.key === 'R') && ws.mode === 'practice') {
       e.preventDefault();
       resetPracticeScope('screen');
-    } else if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && ws.mode === 'practice') {
+    } else if ((e.key === 'v' || e.key === 'V') && ws.mode === 'practice') {
       e.preventDefault();
       ETS.toggleBilingual();
-    } else if (['1', '2', '3', '4', 'a', 'b', 'c', 'd', 'A', 'B', 'C', 'D'].includes(e.key)) {
-      const mapKey = { '1': 'A', '2': 'B', '3': 'C', '4': 'D', 'a': 'A', 'b': 'B', 'c': 'C', 'd': 'D', 'A': 'A', 'B': 'B', 'C': 'C', 'D': 'D' };
+    } else if (['1', '2', '3', '4'].includes(e.key)) {
+      const mapKey = { '1': 'A', '2': 'B', '3': 'C', '4': 'D' };
       const letter = mapKey[e.key];
       const sc = currentScreen();
       if (!sc || !letter) return;
