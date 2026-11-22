@@ -18288,7 +18288,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     let wLum = null;
     let snappedCorners = null;
 
-    if (corners && corners.mode === 'web-bullseye') {
+    if (corners && (corners.mode === 'web-bullseye' || corners.mode === 'manual-locked')) {
       const H = computeHomographyDstToSrc(corners);
       if (!H) return null;
       warpedCanvas = document.createElement('canvas');
@@ -19008,14 +19008,17 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                 <strong style="font-size:13px;">${ETS.icon('target')} Khung 4 Góc Vùng Đáp Án (LISTENING + READING)</strong>
                 ${omrState.corners && omrState.corners.mode
-                  ? `<span class="badge ${omrState.corners.mode === 'manual-fallback' ? 'badge-warn' : 'badge-success'}">${omrState.corners.mode === 'web-bullseye' ? 'Khớp Phiếu Web' : (omrState.corners.mode === 'ets-grid' ? 'Khớp Mẫu ETS PDF' : 'Kéo chỉnh 4 góc')}</span>`
+                  ? `<span class="badge ${omrState.corners.mode === 'manual-fallback' ? 'badge-warn' : (omrState.corners.mode === 'manual-locked' ? 'badge-primary' : 'badge-success')}">${omrState.corners.mode === 'web-bullseye' ? 'Khớp Phiếu Web' : (omrState.corners.mode === 'ets-grid' ? 'Khớp Mẫu ETS PDF' : (omrState.corners.mode === 'manual-locked' ? 'Đã khóa 4 góc bạn chọn' : 'Kéo chỉnh 4 góc'))}</span>`
                   : ''}
               </div>
-              <div style="display:flex;gap:6px;">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
                 <button class="btn btn-xs ${omrState.showWarped ? 'btn-primary' : ''}" onclick="ETS.toggleOmrWarpedPreview()" ${omrState.warpedCanvas ? '' : 'disabled'}>
                   ${ETS.icon('eye')} ${omrState.showWarped ? 'Xem Ảnh Gốc' : 'Xem Bản Nắn Phẳng'}
                 </button>
-                <button class="btn btn-xs btn-primary" onclick="ETS.regradeFromCorners()" ${omrState.srcCanvas ? '' : 'disabled'}>
+                <button class="btn btn-xs" onclick="ETS.autoRedetectOmrCorners()" ${omrState.srcCanvas ? '' : 'disabled'}>
+                  ${ETS.icon('target')} Tự dò lại
+                </button>
+                <button class="btn btn-xs btn-primary" onclick="ETS.regradeFromCorners(false, true)" ${omrState.srcCanvas ? '' : 'disabled'}>
                   ${ETS.icon('refresh')} Chấm Lại Từ 4 Góc
                 </button>
               </div>
@@ -19114,10 +19117,16 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           ctx.moveTo(c.readCorners.tl.x, c.readCorners.tl.y);
           ctx.lineTo(c.readCorners.bl.x, c.readCorners.bl.y);
         } else {
-          const midTop = applyHomography(Hprev, ANS_W * 0.5, 0);
-          const midBot = applyHomography(Hprev, ANS_W * 0.5, ANS_H);
-          ctx.moveTo(midTop.x, midTop.y);
-          ctx.lineTo(midBot.x, midBot.y);
+          const lx1 = ((307.56 - PDF_BOX.x0) / PDF_BOX.w) * ANS_W;
+          const rx0 = ((315.12 - PDF_BOX.x0) / PDF_BOX.w) * ANS_W;
+          const lTop = applyHomography(Hprev, lx1, 0);
+          const lBot = applyHomography(Hprev, lx1, ANS_H);
+          const rTop = applyHomography(Hprev, rx0, 0);
+          const rBot = applyHomography(Hprev, rx0, ANS_H);
+          ctx.moveTo(lTop.x, lTop.y);
+          ctx.lineTo(lBot.x, lBot.y);
+          ctx.moveTo(rTop.x, rTop.y);
+          ctx.lineTo(rBot.x, rBot.y);
         }
         for (let kb = 0; kb < 5; kb++) {
           const bL = applyHomography(Hprev, 0, CANON_BAND_Y[kb]);
@@ -19209,6 +19218,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           x: Math.max(0, Math.min(canvas.width, pos.x)),
           y: Math.max(0, Math.min(canvas.height, pos.y))
         };
+        omrState.corners.mode = 'manual-locked';
         delete omrState.corners.listenCorners;
         delete omrState.corners.readCorners;
         bindAndDrawPreviewCanvas();
@@ -19255,6 +19265,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
     if (customCorners) {
       omrState.corners = {
+        mode: 'manual-locked',
         tl: { x: customCorners.tl.x * scale, y: customCorners.tl.y * scale },
         tr: { x: customCorners.tr.x * scale, y: customCorners.tr.y * scale },
         bl: { x: customCorners.bl.x * scale, y: customCorners.bl.y * scale },
@@ -19263,17 +19274,31 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     } else {
       omrState.corners = autoDetectFiducials(c);
     }
-    return regradeFromCorners(true);
+    return regradeFromCorners(true, false);
   }
 
-  function regradeFromCorners(skipRender) {
+  function autoRedetectOmrCorners() {
+    if (!omrState.srcCanvas) return;
+    omrState.showWarped = false;
+    omrState.corners = autoDetectFiducials(omrState.srcCanvas);
+    regradeFromCorners(false, false);
+    ETS.toast('Đã tự động dò lại 4 góc từ ảnh gốc.');
+  }
+
+  function regradeFromCorners(skipRender, lockManual) {
     if (!omrState.srcCanvas || !omrState.corners) return null;
+    if (lockManual) {
+      omrState.corners.mode = 'manual-locked';
+      delete omrState.corners.listenCorners;
+      delete omrState.corners.readCorners;
+    }
+    const isManualLocked = omrState.corners.mode === 'manual-locked';
     const res = warpAndGradeSource(omrState.srcCanvas, omrState.corners);
     if (!res) {
       ETS.toast('Không thể giải ma trận biến đổi 4 góc — hãy kéo 4 góc rõ hơn.');
       return null;
     }
-    if (res.snappedCorners) {
+    if (res.snappedCorners && !isManualLocked) {
       omrState.corners = res.snappedCorners;
     }
     omrState.warpedCanvas = res.warpedCanvas;
@@ -19283,7 +19308,13 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     omrState.gradedOnce = true;
     res.detectedMode = (omrState.corners && omrState.corners.mode) || 'custom';
     res.corners = omrState.corners;
-    if (!skipRender && ETS.state.route === 'omr-scan') renderOmrScannerView();
+    if (!skipRender && ETS.state.route === 'omr-scan') {
+      renderOmrScannerView();
+      if (lockManual) {
+        const cnt = Object.values(omrState.answers).filter(Boolean).length;
+        ETS.toast(`Đã chấm lại chuẩn theo đúng 4 góc bạn đặt (${cnt}/200 câu)!`);
+      }
+    }
     return res;
   }
 
@@ -19489,6 +19520,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   ETS.toggleOmrCamera = toggleOmrCamera;
   ETS.captureOmrCameraFrame = captureOmrCameraFrame;
   ETS.regradeFromCorners = regradeFromCorners;
+  ETS.autoRedetectOmrCorners = autoRedetectOmrCorners;
   ETS.saveOmrResultAndOpenCert = saveOmrResultAndOpenCert;
 })();
 
