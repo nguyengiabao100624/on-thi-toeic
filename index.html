@@ -16942,10 +16942,33 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     );
   }
 
-  // Illumination-normalized grayscale field (removes flash/shadow gradients without bleaching gray bands)
+  function solveLinearSystemN(A, b) {
+    const n = b.length;
+    const M = A.map((row, i) => row.concat([b[i]]));
+    for (let col = 0; col < n; col++) {
+      let maxRow = col;
+      for (let r = col + 1; r < n; r++) {
+        if (Math.abs(M[r][col]) > Math.abs(M[maxRow][col])) maxRow = r;
+      }
+      const tmp = M[col];
+      M[col] = M[maxRow];
+      M[maxRow] = tmp;
+      const piv = M[col][col];
+      if (Math.abs(piv) < 1e-10) return null;
+      for (let j = col; j <= n; j++) M[col][j] /= piv;
+      for (let r = 0; r < n; r++) {
+        if (r === col) continue;
+        const factor = M[r][col];
+        for (let j = col; j <= n; j++) M[r][j] -= factor * M[col][j];
+      }
+    }
+    return M.map((row) => row[n]);
+  }
+
+  // Normalizer A (v8.3): Upper-Envelope 2D Quadratic Illumination Surface (preserves ultra-faded photocopies with zero bleaching!)
   function buildNormalizedGray(gray, dw, dh) {
-    const gxN = 6, gyN = 8;
-    const grid = new Float32Array(gxN * gyN);
+    const gxN = 8, gyN = 8;
+    const cells = [];
     for (let gy = 0; gy < gyN; gy++) {
       const y0 = Math.floor((gy / gyN) * dh);
       const y1 = Math.floor(((gy + 1) / gyN) * dh);
@@ -16956,24 +16979,125 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         for (let y = y0; y < y1; y += 3) {
           for (let x = x0; x < x1; x += 3) samples.push(gray[y * dw + x]);
         }
+        if (!samples.length) continue;
         samples.sort((a, b) => a - b);
-        grid[gy * gxN + gx] = samples.length ? samples[Math.floor(samples.length * 0.86)] : 255;
+        const p93 = samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.93))];
+        cells.push({ u: (gx + 0.5) / gxN - 0.5, v: (gy + 0.5) / gyN - 0.5, val: p93 });
       }
     }
+    const valsSorted = cells.map((c) => c.val).sort((a, b) => a - b);
+    const globalP85 = valsSorted.length ? valsSorted[Math.floor(valsSorted.length * 0.85)] : 240;
+    const active = cells.filter((c) => c.val >= globalP85 * 0.44);
+    const pts = active.length >= 10 ? active : cells;
+
+    let coeffs = [globalP85, 0, 0, 0, 0, 0];
+    const evalQuad = (c, u, v) => c[0] + c[1] * u + c[2] * v + c[3] * u * u + c[4] * u * v + c[5] * v * v;
+    if (pts.length >= 6) {
+      for (let iter = 0; iter < 3; iter++) {
+        const ATA = Array.from({ length: 6 }, () => new Array(6).fill(0));
+        const ATb = new Array(6).fill(0);
+        for (let pIdx = 0; pIdx < pts.length; pIdx++) {
+          const { u, v, val } = pts[pIdx];
+          let w = 1.0;
+          if (iter > 0) {
+            const pred = evalQuad(coeffs, u, v);
+            const resid = val - pred;
+            if (resid < -2.5) w = 0.08;
+            else if (resid > 18.0) w = 0.35;
+          }
+          const phi = [1, u, v, u * u, u * v, v * v];
+          for (let r = 0; r < 6; r++) {
+            ATb[r] += w * phi[r] * val;
+            for (let c = 0; c < 6; c++) ATA[r][c] += w * phi[r] * phi[c];
+          }
+        }
+        ATA[3][3] += 0.25;
+        ATA[4][4] += 0.25;
+        ATA[5][5] += 0.25;
+        const solved = solveLinearSystemN(ATA, ATb);
+        if (solved) coeffs = solved;
+      }
+    }
+
+    const norm = new Float32Array(dw * dh);
+    const minBg = Math.max(55, globalP85 * 0.42);
+    const maxBg = Math.min(255, globalP85 * 1.35 + 15);
+    for (let y = 0; y < dh; y++) {
+      const v = (y + 0.5) / dh - 0.5;
+      const rowOff = y * dw;
+      for (let x = 0; x < dw; x++) {
+        const u = (x + 0.5) / dw - 0.5;
+        const bg = Math.max(minBg, Math.min(maxBg, evalQuad(coeffs, u, v)));
+        norm[rowOff + x] = Math.min(255, (gray[rowOff + x] * 250) / bg);
+      }
+    }
+    return norm;
+  }
+
+  // Normalizer B (v8.3): Local Upper-Envelope Surface for sharp shadow bands & flash hotspots
+  function buildLocalShadowNormGray(gray, dw, dh, radFrac) {
+    const rf = radFrac || 0.048;
+    const gxN = Math.max(14, Math.min(24, Math.round(dw / 30)));
+    const gyN = Math.max(14, Math.min(24, Math.round(dh / 30)));
+    const rad = Math.max(16, Math.round(Math.max(dw, dh) * rf));
+    const step = Math.max(2, Math.round(rad / 12));
+    const grid = new Float32Array(gxN * gyN);
+    const allCells = [];
+    const buf = [];
+
+    for (let gy = 0; gy < gyN; gy++) {
+      const cy = Math.floor(((gy + 0.5) / gyN) * dh);
+      const y0 = Math.max(0, cy - rad), y1 = Math.min(dh, cy + rad + 1);
+      for (let gx = 0; gx < gxN; gx++) {
+        const cx = Math.floor(((gx + 0.5) / gxN) * dw);
+        const x0 = Math.max(0, cx - rad), x1 = Math.min(dw, cx + rad + 1);
+        buf.length = 0;
+        for (let y = y0; y < y1; y += step) {
+          const rOff = y * dw;
+          for (let x = x0; x < x1; x += step) buf.push(gray[rOff + x]);
+        }
+        buf.sort((a, b) => a - b);
+        const p95 = buf.length ? buf[Math.min(buf.length - 1, Math.floor(buf.length * 0.95))] : 240;
+        grid[gy * gxN + gx] = p95;
+        allCells.push(p95);
+      }
+    }
+    allCells.sort((a, b) => a - b);
+    const globalP90 = allCells.length ? allCells[Math.min(allCells.length - 1, Math.floor(allCells.length * 0.90))] : 240;
+    const minBg = Math.max(48, globalP90 * 0.24);
+    const maxBg = Math.min(255, globalP90 * 1.25 + 16);
+
+    const cur = new Float32Array(gxN * gyN);
+    for (let i = 0; i < grid.length; i++) cur[i] = Math.max(minBg, Math.min(maxBg, grid[i]));
+    const sm = new Float32Array(gxN * gyN);
+    for (let gy = 0; gy < gyN; gy++) {
+      const gm = Math.max(0, gy - 1), gp = Math.min(gyN - 1, gy + 1);
+      for (let gx = 0; gx < gxN; gx++) {
+        const xm = Math.max(0, gx - 1), xp = Math.min(gxN - 1, gx + 1);
+        sm[gy * gxN + gx] = (
+          cur[gm * gxN + xm] + 2 * cur[gm * gxN + gx] + cur[gm * gxN + xp] +
+          2 * cur[gy * gxN + xm] + 8 * cur[gy * gxN + gx] + 2 * cur[gy * gxN + xp] +
+          cur[gp * gxN + xm] + 2 * cur[gp * gxN + gx] + cur[gp * gxN + xp]
+        ) / 20;
+      }
+    }
+
     const norm = new Float32Array(dw * dh);
     for (let y = 0; y < dh; y++) {
-      const fy = (y / dh) * gyN - 0.5;
-      const iy0 = Math.max(0, Math.min(gyN - 1, Math.floor(fy)));
-      const iy1 = Math.max(0, Math.min(gyN - 1, iy0 + 1));
-      const wy = Math.max(0, Math.min(1, fy - iy0));
+      const fy = ((y + 0.5) / dh) * gyN - 0.5;
+      const y0 = Math.max(0, Math.min(gyN - 1, Math.floor(fy)));
+      const y1 = Math.min(gyN - 1, y0 + 1);
+      const wy = Math.max(0, Math.min(1, fy - y0));
+      const rowOff = y * dw;
       for (let x = 0; x < dw; x++) {
-        const fx = (x / dw) * gxN - 0.5;
-        const ix0 = Math.max(0, Math.min(gxN - 1, Math.floor(fx)));
-        const ix1 = Math.max(0, Math.min(gxN - 1, ix0 + 1));
-        const wx = Math.max(0, Math.min(1, fx - ix0));
-        const bg = (grid[iy0 * gxN + ix0] * (1 - wx) + grid[iy0 * gxN + ix1] * wx) * (1 - wy)
-                 + (grid[iy1 * gxN + ix0] * (1 - wx) + grid[iy1 * gxN + ix1] * wx) * wy;
-        norm[y * dw + x] = Math.min(255, (gray[y * dw + x] * 252) / Math.max(70, bg));
+        const fx = ((x + 0.5) / dw) * gxN - 0.5;
+        const x0 = Math.max(0, Math.min(gxN - 1, Math.floor(fx)));
+        const x1 = Math.min(gxN - 1, x0 + 1);
+        const wx = Math.max(0, Math.min(1, fx - x0));
+        const b00 = sm[y0 * gxN + x0], b10 = sm[y0 * gxN + x1];
+        const b01 = sm[y1 * gxN + x0], b11 = sm[y1 * gxN + x1];
+        const bg = (b00 * (1 - wx) + b10 * wx) * (1 - wy) + (b01 * (1 - wx) + b11 * wx) * wy;
+        norm[rowOff + x] = Math.min(255, (gray[rowOff + x] * 250) / Math.max(minBg, bg));
       }
     }
     return norm;
@@ -17015,145 +17139,182 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     return { x, y };
   }
 
-  // Fallback Stage B: Detect LISTENING + READING outer frame & center gutter on mẫu tô trắc nghiệm.pdf / TF66E100
-  function detectOfficialEtsGridCorners(normGray, dw, dh, scale) {
-    const tw = Math.min(540, dw);
-    const s = tw / dw;
-    const th = Math.round(dh * s);
-    const small = new Float32Array(tw * th);
-    for (let y = 0; y < th; y++) {
-      const sy = Math.min(dh - 1, Math.round(y / s));
-      for (let x = 0; x < tw; x++) {
-        small[y * tw + x] = normGray[sy * dw + Math.min(dw - 1, Math.round(x / s))];
-      }
+  // Apples-to-apples Illumination-Invariant Structural Verification on raw gray (200x131 warped thumbnail, ~0.6ms)
+  function scoreCandidateOnRawGray(rawGray, dw, dh, cand, scale, gutterTol = 1) {
+    if (!cand || !cand.tl || !cand.tr || !cand.bl || !cand.br) return { total: -1e9, posTrans: 0, gutPos: 0, hdrMin: -1, outMin: -1 };
+    const pts = [
+      { x: cand.tl.x * scale, y: cand.tl.y * scale },
+      { x: cand.tr.x * scale, y: cand.tr.y * scale },
+      { x: cand.bl.x * scale, y: cand.bl.y * scale },
+      { x: cand.br.x * scale, y: cand.br.y * scale }
+    ];
+    const wTop = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+    const wBot = Math.hypot(pts[3].x - pts[2].x, pts[3].y - pts[2].y);
+    const hLeft = Math.hypot(pts[2].x - pts[0].x, pts[2].y - pts[0].y);
+    const hRight = Math.hypot(pts[3].x - pts[1].x, pts[3].y - pts[1].y);
+    if (wTop < dw * 0.28 || hLeft < dh * 0.12) return { total: -1e9, posTrans: 0, gutPos: 0, hdrMin: -1, outMin: -1 };
+    const ar = (0.5 * (wTop + wBot)) / Math.max(10, 0.5 * (hLeft + hRight));
+    if (ar < 1.15 || ar > 1.98) return { total: -1e9, posTrans: 0, gutPos: 0, hdrMin: -1, outMin: -1 };
+    if (Math.abs(wTop - wBot) / Math.max(wTop, wBot) > 0.22) return { total: -1e9, posTrans: 0, gutPos: 0, hdrMin: -1, outMin: -1 };
+    if (Math.abs(hLeft - hRight) / Math.max(hLeft, hRight) > 0.22) return { total: -1e9, posTrans: 0, gutPos: 0, hdrMin: -1, outMin: -1 };
+
+    const H = solveHomographyPts(
+      [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 0, y: 131 }, { x: 200, y: 131 }],
+      pts
+    );
+    if (!H) return { total: -1e9, posTrans: 0, gutPos: 0, hdrMin: -1, outMin: -1 };
+
+    const samp = (cx, cy) => {
+      const den = H[6] * cx + H[7] * cy + 1.0;
+      const sx = (H[0] * cx + H[1] * cy + H[2]) / den;
+      const sy = (H[3] * cx + H[4] * cy + H[5]) / den;
+      if (sx < 0 || sx >= dw - 1 || sy < 0 || sy >= dh - 1) return -1;
+      const ix = sx | 0, iy = sy | 0, fx = sx - ix, fy = sy - iy;
+      const i0 = iy * dw + ix;
+      return (rawGray[i0] * (1 - fx) + rawGray[i0 + 1] * fx) * (1 - fy) +
+             (rawGray[i0 + dw] * (1 - fx) + rawGray[i0 + dw + 1] * fx) * fy;
+    };
+    const medOf = (arr) => {
+      if (!arr.length) return 0;
+      arr.sort((a, b) => a - b);
+      return arr[arr.length >> 1];
+    };
+    const p75Of = (arr) => {
+      if (!arr.length) return 0;
+      arr.sort((a, b) => a - b);
+      return arr[Math.min(arr.length - 1, Math.floor(arr.length * 0.75))];
+    };
+
+    const hDropL = [], hDropR = [];
+    for (let k = 0; k < 8; k++) {
+      const xL = 12 + k * 10.5;
+      const abL = Math.min(samp(xL, -4), samp(xL, -7));
+      const inL1 = samp(xL, 4), inL2 = samp(xL, 9);
+      if (abL > 20 && inL1 >= 0 && inL2 >= 0) hDropL.push((abL - Math.max(inL1, inL2)) / Math.max(45, abL));
+
+      const xR = 114 + k * 10.5;
+      const abR = Math.min(samp(xR, -4), samp(xR, -7));
+      const inR1 = samp(xR, 4), inR2 = samp(xR, 9);
+      if (abR > 20 && inR1 >= 0 && inR2 >= 0) hDropR.push((abR - Math.max(inR1, inR2)) / Math.max(45, abR));
     }
-    const sampleSmall = (x, y) => {
-      if (x < 0 || x >= tw || y < 0 || y >= th) return 255;
-      return small[(y | 0) * tw + (x | 0)];
-    };
-    const pct75 = (arr) => {
-      if (!arr.length) return 255;
-      const a = arr.slice().sort((u, v) => u - v);
-      return a[Math.min(a.length - 1, Math.floor(a.length * 0.75))];
-    };
+    const hdrL = medOf(hDropL), hdrR = medOf(hDropR);
+    if (hdrL < 0.012 || hdrR < 0.012) return { total: -500 + (hdrL + hdrR) * 400, posTrans: 0, gutPos: 0, hdrMin: Math.min(hdrL, hdrR), outMin: -1 };
 
-    const BAND_FRACS = [0.197, 0.376, 0.554, 0.733, 0.911];
-    let bestCand = null;
-    const rowMask = new Uint8Array(tw);
-    for (let deg = -10; deg <= 10; deg += 1) {
-      const slope = Math.tan((deg * Math.PI) / 180);
-      for (let yr = Math.round(th * 0.02); yr < Math.round(th * 0.48); yr += 2) {
-        for (let x = 0; x < tw; x++) {
-          const yy = Math.round(yr + (x - tw * 0.5) * slope);
-          const v = sampleSmall(x, yy);
-          rowMask[x] = (v <= 228) ? 1 : 0;
-        }
-        const runs = [];
-        let x = 0;
-        while (x < tw) {
-          if (!rowMask[x]) { x++; continue; }
-          const xStart = x;
-          let gap = 0, lastOn = x;
-          x++;
-          while (x < tw) {
-            if (rowMask[x]) { lastOn = x; gap = 0; }
-            else { gap++; if (gap > 1) break; }
-            x++;
-          }
-          if (lastOn - xStart >= tw * 0.14) runs.push([xStart, lastOn]);
-        }
-        for (let i = 0; i < runs.length - 1; i++) {
-          const [L0, L1] = runs[i];
-          const [R0, R1] = runs[i + 1];
-          const wL = L1 - L0, wR = R1 - R0;
-          const totalW = R1 - L0;
-          const gap = R0 - L1;
-          if (totalW < tw * 0.35 || totalW > tw * 0.96) continue;
-          if (gap < Math.max(1.5, totalW * 0.005) || gap > totalW * 0.052) continue;
-          if (Math.abs(wL - wR) / Math.max(wL, wR) > 0.12) continue;
-
-          const totalH = totalW * (PDF_BOX.h / PDF_BOX.w);
-          const outL = Math.max(
-            sampleSmall(L0 - 4, yr + (L0 - tw * 0.5) * slope),
-            sampleSmall(L0 - 7, yr + (L0 - tw * 0.5) * slope)
-          );
-          const outR = Math.max(
-            sampleSmall(R1 + 4, yr + (R1 - tw * 0.5) * slope),
-            sampleSmall(R1 + 7, yr + (R1 - tw * 0.5) * slope)
-          );
-          if (outL < 205 || outR < 205) continue;
-
-          // Snap to crisp white-above -> gray-header top boundary & measure collinearity across L & R
-          let hdrTopYr = yr, hdrScore = -1e9;
-          const xsHdr = [0.10, 0.22, 0.34, 0.42, 0.58, 0.66, 0.78, 0.90].map((f) => L0 + totalW * f);
-          for (let dy = -Math.round(totalH * 0.11); dy <= Math.round(totalH * 0.03); dy++) {
-            const perProbe = [];
-            for (const xh of xsHdr) {
-              const yy = yr + dy + (xh - tw * 0.5) * slope;
-              const ab = sampleSmall(xh, yy - 3) * 0.5 + sampleSmall(xh, yy - 5) * 0.5;
-              const bl = sampleSmall(xh, yy + 3) * 0.5 + sampleSmall(xh, yy + 6) * 0.5;
-              perProbe.push((ab - bl) + (ab - sampleSmall(xh, yy)) * 0.6);
-            }
-            // Trim lowest 2 (immune to occasional top black timing dot) and sum
-            perProbe.sort((a, b) => a - b);
-            const sc = perProbe.slice(2).reduce((acc, v) => acc + v, 0) / 6;
-            if (sc > hdrScore) { hdrScore = sc; hdrTopYr = yr + dy; }
-          }
-          if (hdrTopYr + totalH >= th * 0.99) continue;
-
-          // 5-band anti-phase ETS checkerboard check (Listening gray vs Reading white alternating every 5 rows!)
-          const diffs = [];
-          for (let b = 0; b < 5; b++) {
-            const fracY = BAND_FRACS[b];
-            const valsL = [], valsR = [];
-            for (let k = 0; k < 6; k++) {
-              const txL = L0 + wL * (0.10 + (k / 5) * 0.80);
-              const txR = R0 + wR * (0.10 + (k / 5) * 0.80);
-              for (let dy = -2; dy <= 2; dy += 2) {
-                valsL.push(sampleSmall(txL, hdrTopYr + totalH * fracY + (txL - tw * 0.5) * slope + dy));
-                valsR.push(sampleSmall(txR, hdrTopYr + totalH * fracY + (txR - tw * 0.5) * slope + dy));
-              }
-            }
-            const bgL = pct75(valsL);
-            const bgR = pct75(valsR);
-            diffs.push((b % 2 === 0) ? (bgR - bgL) : (bgL - bgR));
-          }
-          const posBands = diffs.filter((d) => d > 6).length;
-          const antiSum = diffs.reduce((acc, d) => acc + d, 0);
-          if (posBands < 4 || antiSum < 35) continue;
-
-          const abVals = [], blVals = [];
-          const yTopCheck = hdrTopYr - Math.max(3, totalH * 0.036);
-          const yBotCheck = hdrTopYr + totalH + Math.max(3, totalH * 0.030);
-          for (let k = 0; k < 6; k++) {
-            const txL = L0 + wL * ((k + 0.5) / 6);
-            const txR = R0 + wR * ((k + 0.5) / 6);
-            abVals.push(sampleSmall(txL, yTopCheck + (txL - tw * 0.5) * slope), sampleSmall(txR, yTopCheck + (txR - tw * 0.5) * slope));
-            blVals.push(sampleSmall(txL, yBotCheck + (txL - tw * 0.5) * slope), sampleSmall(txR, yBotCheck + (txR - tw * 0.5) * slope));
-          }
-          const aboveWhite = pct75(abVals);
-          const belowWhite = pct75(blVals);
-          if (aboveWhite < 200 || belowWhite < 195) continue;
-
-          const score = hdrScore * 2.0 + antiSum * 2.5 + posBands * 30 + (aboveWhite - 190) * 0.7 + (belowWhite - 190) * 0.5 + totalW * 0.15;
-          if (!bestCand || score > bestCand.score) {
-            bestCand = { score, deg, slope, L0: L0 / s, L1: L1 / s, R0: R0 / s, R1: R1 / s, yrTop: hdrTopYr / s, estW: totalW / s, estH: totalH / s };
-          }
+    const bandY = [25.8, 49.2, 72.6, 96.0, 119.3];
+    const logL = [], logR = [];
+    for (let b = 0; b < 5; b++) {
+      const vL = [], vR = [];
+      for (let k = 0; k < 7; k++) {
+        const xL = 14 + k * 11.5, xR = 114 + k * 11.5;
+        for (let dy = -3; dy <= 3; dy += 3) {
+          const a = samp(xL, bandY[b] + dy), c = samp(xR, bandY[b] + dy);
+          if (a > 0) vL.push(a);
+          if (c > 0) vR.push(c);
         }
       }
+      logL.push(Math.log(Math.max(20, p75Of(vL))));
+      logR.push(Math.log(Math.max(20, p75Of(vR))));
     }
+    const trans = [
+      logL[1] - logL[0], logL[1] - logL[2], logL[3] - logL[2], logL[3] - logL[4],
+      logR[0] - logR[1], logR[2] - logR[1], logR[2] - logR[3], logR[4] - logR[3]
+    ];
+    const posTrans = trans.filter((t) => t > 0.010).length;
+    const sumTrans = trans.reduce((a, b) => a + Math.min(0.28, Math.max(-0.15, b)), 0);
 
-    if (!bestCand) return null;
+    const gDrops = [];
+    for (let r = 0; r < 10; r++) {
+      const cy = 6 + r * 12.2;
+      let gMid = Math.max(samp(99, cy), samp(100, cy), samp(101, cy));
+      if (gutterTol >= 2) gMid = Math.max(gMid, samp(98, cy), samp(102, cy));
+      const sideOff = gutterTol >= 2 ? 9 : 7;
+      const gSide = 0.5 * (samp(100 - sideOff, cy) + samp(100 + sideOff, cy));
+      if (gMid > 20 && gSide > 0) gDrops.push((gMid - gSide) / Math.max(45, gMid));
+    }
+    const gutMed = medOf(gDrops);
+    const gutPos = gDrops.filter((g) => g > 0.020).length;
 
-    // Step 2: Refine outer borders & crisp white center gutter in normGray (dw x dh)
+    let outLSc = 0, outRSc = 0;
+    const oL = samp(-5, 7), iL = samp(5, 7);
+    if (oL > 20 && iL > 0) outLSc = Math.min(0.30, (oL - iL) / Math.max(45, oL));
+    else outLSc = 0.06;
+    const oR = samp(205, 7), iR = samp(195, 7);
+    if (oR > 20 && iR > 0) outRSc = Math.min(0.30, (oR - iR) / Math.max(45, oR));
+    else outRSc = 0.06;
+
+    const botDrops = [];
+    for (let k = 0; k < 6; k++) {
+      const xL = 14 + k * 14;
+      const bel = Math.max(samp(xL, 134), samp(xL, 137));
+      const ins = samp(xL, 126);
+      if (bel > 20 && ins > 0) botDrops.push((bel - ins) / Math.max(45, bel));
+    }
+    const botMed = botDrops.length ? medOf(botDrops) : 0.05;
+
+    const total =
+      Math.min(0.35, hdrL) * 180 + Math.min(0.35, hdrR) * 180 +
+      posTrans * 38 + sumTrans * 260 +
+      gutPos * 18 + Math.min(0.35, Math.max(-0.2, gutMed)) * 220 +
+      outLSc * 160 + outRSc * 160 +
+      Math.min(0.28, Math.max(-0.15, botMed)) * 120;
+    return { total, posTrans, gutPos, hdrMin: Math.min(hdrL, hdrR), gutMed, outMin: Math.min(outLSc, outRSc) };
+  }
+
+  // Helper: insert candidate into top-K spatially diverse list (prevents 1 bogus high-yr candidate from masking the real sheet!)
+  function pushDiverseCandidate(list, cand, maxK) {
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      if (Math.abs(o.yrTop - cand.yrTop) < 22 && Math.abs(o.deg - cand.deg) <= 2 && Math.abs(o.estW - cand.estW) < 40) {
+        if (cand.score > o.score) list[i] = cand;
+        return;
+      }
+    }
+    list.push(cand);
+    list.sort((a, b) => b.score - a.score);
+    if (list.length > maxK) list.length = maxK;
+  }
+
+  // Convert coarse candidate directly to rough 4 corners for fast fingerprint ranking before Step-2 refinement
+  function coarseCandToQuad(cand, scale) {
+    const xMid = 0.5 * (cand.L0 + cand.R1);
+    const yTL = cand.yrTop + (cand.L0 - xMid) * cand.slope;
+    const yTR = cand.yrTop + (cand.R1 - xMid) * cand.slope;
+    const dxB = -cand.slope * cand.estH;
+    return {
+      tl: { x: cand.L0 / scale, y: yTL / scale },
+      tr: { x: cand.R1 / scale, y: yTR / scale },
+      bl: { x: (cand.L0 + dxB) / scale, y: (yTL + cand.estH) / scale },
+      br: { x: (cand.R1 + dxB) / scale, y: (yTR + cand.estH) / scale }
+    };
+  }
+
+  function refineEtsCandidate(normGray, dw, dh, scale, bestCand) {
+    const normSmooth = new Float32Array(dw * dh);
+    for (let y = 0; y < dh; y++) {
+      const ym = Math.max(0, y - 1), yp = Math.min(dh - 1, y + 1);
+      for (let x = 0; x < dw; x++) {
+        const xm = Math.max(0, x - 1), xp = Math.min(dw - 1, x + 1);
+        normSmooth[y * dw + x] = (
+          normGray[ym * dw + xm] + normGray[ym * dw + x] + normGray[ym * dw + xp] +
+          normGray[y * dw + xm] + normGray[y * dw + x] + normGray[y * dw + xp] +
+          normGray[yp * dw + xm] + normGray[yp * dw + x] + normGray[yp * dw + xp]
+        ) / 9;
+      }
+    }
     const sampleNorm = (x, y) => {
       const ix = Math.max(0, Math.min(dw - 1, Math.round(x)));
       const iy = Math.max(0, Math.min(dh - 1, Math.round(y)));
       return normGray[iy * dw + ix];
     };
+    const sampleSmooth = (x, y) => {
+      const ix = Math.max(0, Math.min(dw - 1, Math.round(x)));
+      const iy = Math.max(0, Math.min(dh - 1, Math.round(y)));
+      return normSmooth[iy * dw + ix];
+    };
+    const pageW2 = bestCand.pageW || 248;
 
     const xMidInit = (bestCand.L0 + bestCand.R1) * 0.5;
-    // Measure TOP border Y independently in Left half (Listening) & Right half (Reading) so slope error in Step 1 auto-corrects!
+    const hDepth2 = Math.max(6, bestCand.estH * 0.055);
     function findHalfTopY(fracMin, fracMax) {
       const probes = [];
       for (let i = 0; i < 7; i++) probes.push(bestCand.L0 + bestCand.estW * (fracMin + (i / 6) * (fracMax - fracMin)));
@@ -17164,13 +17325,13 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         const scArr = [];
         for (const xp of probes) {
           const yy = baseHalfY + dy + (xp - cxHalf) * bestCand.slope;
-          const above = Math.min(sampleNorm(xp, yy - 3), sampleNorm(xp, yy - 5));
-          const below = (sampleNorm(xp, yy + 3) + sampleNorm(xp, yy + 6)) * 0.5;
-          let sc = (above - sampleNorm(xp, yy)) * 1.1 + Math.min(75, Math.max(-35, above - below)) * 0.8;
-          if (above < 185) sc -= 120;
+          const above = Math.min(sampleSmooth(xp, yy - 3), sampleSmooth(xp, yy - 6));
+          const below = Math.max((sampleSmooth(xp, yy + 3) + sampleSmooth(xp, yy + 6)) * 0.5, sampleSmooth(xp, yy + hDepth2));
+          const onLine = Math.min(sampleNorm(xp, yy), sampleNorm(xp, yy - 1), sampleNorm(xp, yy + 1));
+          let sc = Math.min(55, Math.max(-25, above - onLine)) * 1.0 + Math.min(60, Math.max(-35, above - below)) * 0.95;
+          if (above < pageW2 - 78) sc -= 100;
           scArr.push(sc);
         }
-        // Trimmed mean ignores up to 2 probes landing on top black timing dots
         scArr.sort((a, b) => a - b);
         const avgSc = scArr.slice(2).reduce((a, b) => a + b, 0) / 5;
         if (avgSc > bestSc) { bestSc = avgSc; bestY = baseHalfY + dy; }
@@ -17182,7 +17343,6 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const initSlope = (hTopR.y - hTopL.y) / Math.max(20, hTopR.cx - hTopL.cx);
     const initTopAt = (x) => hTopL.y + (x - hTopL.cx) * initSlope;
 
-    // Top line: tightly track along initTopAt(px)
     const topPts = [];
     const searchTopY = Math.max(7, Math.round(bestCand.estH * 0.045));
     for (let i = 0; i < 16; i++) {
@@ -17192,10 +17352,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       let bestTy = baseY, bestTs = -1e9;
       for (let d = -searchTopY; d <= searchTopY; d++) {
         const y = baseY + d;
-        const above = Math.min(sampleNorm(px, y - 3), sampleNorm(px, y - 6));
-        const below = (sampleNorm(px, y + 3) + sampleNorm(px, y + 6)) * 0.5;
-        let sc = (above - sampleNorm(px, y)) * 1.1 + Math.min(75, Math.max(-30, above - below)) * 0.7;
-        if (above < 190) sc -= 140;
+        const above = Math.min(sampleSmooth(px, y - 3), sampleSmooth(px, y - 6));
+        const below = Math.max((sampleSmooth(px, y + 3) + sampleSmooth(px, y + 6)) * 0.5, sampleSmooth(px, y + hDepth2));
+        const onLine = Math.min(sampleNorm(px, y), sampleNorm(px, y - 1), sampleNorm(px, y + 1));
+        let sc = Math.min(55, Math.max(-25, above - onLine)) * 1.0 + Math.min(60, Math.max(-30, above - below)) * 0.85;
+        if (above < pageW2 - 74) sc -= 110;
         if (sc > bestTs) { bestTs = sc; bestTy = y; }
       }
       topPts.push({ x: px, y: bestTy });
@@ -17203,45 +17364,56 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const lTop = fitRobustLine(topPts, true);
     if (!lTop) return null;
 
-    // Refine 4 Header vertical boundaries inside the bubble-free Header Band (averaged over 3 heights)
-    function findHeaderEdgeX(estX, topAtEstX, dirOutSign) {
-      const rad = Math.max(8, Math.round(bestCand.estW * 0.032));
+    function findHeaderEdgeX(estX, topAtEstX, dirOutSign, customRad) {
+      const rad = customRad || Math.max(8, Math.round(bestCand.estW * 0.036));
       const yOffsets = [bestCand.estH * 0.028, bestCand.estH * 0.052, bestCand.estH * 0.076];
       let bestX = estX, bestSc = -1e9;
       for (let d = -rad; d <= rad; d++) {
         const x = estX + d;
+        if (x < 2 || x > dw - 3) continue;
         let sumSc = 0;
         for (const yOff of yOffsets) {
           const yAtX = topAtEstX + yOff;
-          const outW = Math.min(sampleNorm(x + dirOutSign * 3, yAtX), sampleNorm(x + dirOutSign * 6, yAtX));
-          const inG = (sampleNorm(x - dirOutSign * 3, yAtX) + sampleNorm(x - dirOutSign * 6, yAtX)) * 0.5;
-          let s1 = (outW - sampleNorm(x, yAtX)) * 1.1 + Math.min(70, Math.max(-40, outW - inG)) * 0.65;
-          if (outW < 185) s1 -= 120;
+          const outW = Math.min(sampleSmooth(x + dirOutSign * 3, yAtX), sampleSmooth(x + dirOutSign * 6, yAtX));
+          const inG = (sampleSmooth(x - dirOutSign * 3, yAtX) + sampleSmooth(x - dirOutSign * 6, yAtX)) * 0.5;
+          const onLine = Math.min(sampleNorm(x, yAtX), sampleNorm(x - dirOutSign, yAtX));
+          let s1 = (outW - onLine) * 1.05 + Math.min(70, Math.max(-40, outW - inG)) * 0.75;
+          if (outW < pageW2 - 75) s1 -= 100;
           sumSc += s1;
         }
-        const sc = sumSc / yOffsets.length - Math.abs(d) * 0.25;
+        const sc = sumSc / yOffsets.length - Math.abs(d) * 0.22;
         if (sc > bestSc) { bestSc = sc; bestX = x; }
       }
       return bestX;
     }
-    const xL_head = findHeaderEdgeX(bestCand.L0, lTop.slope * bestCand.L0 + lTop.intercept, -1);
+    let xL_head = findHeaderEdgeX(bestCand.L0, lTop.slope * bestCand.L0 + lTop.intercept, -1);
     const xLR_head = findHeaderEdgeX(bestCand.L1, lTop.slope * bestCand.L1 + lTop.intercept, 1);
     const xRL_head = findHeaderEdgeX(bestCand.R0, lTop.slope * bestCand.R0 + lTop.intercept, -1);
-    const xR_head = findHeaderEdgeX(bestCand.R1, lTop.slope * bestCand.R1 + lTop.intercept, 1);
+    let xR_head = findHeaderEdgeX(bestCand.R1, lTop.slope * bestCand.R1 + lTop.intercept, 1);
+
+    const wLh = xLR_head - xL_head;
+    const wRh = xR_head - xRL_head;
+    if (wLh < wRh * 0.90) {
+      const xSymL = Math.max(2, xLR_head - wRh);
+      xL_head = findHeaderEdgeX(xSymL, lTop.slope * xSymL + lTop.intercept, -1, Math.max(10, Math.round(wRh * 0.06)));
+    } else if (wRh < wLh * 0.90) {
+      const xSymR = Math.min(dw - 3, xRL_head + wLh);
+      xR_head = findHeaderEdgeX(xSymR, lTop.slope * xSymR + lTop.intercept, 1, Math.max(10, Math.round(wLh * 0.06)));
+    }
 
     const refinedW = Math.max(40, xR_head - xL_head);
     const refinedH = refinedW * (PDF_BOX.h / PDF_BOX.w);
 
-    // Track Left Vertical Timing Bars (75.6..84.36pt in PDF, 100% bubble-free pure white margin)
     function detectLeftTimingTrack() {
+      if (xL_head < refinedW * 0.042) return null;
       const topAtL = lTop.slope * xL_head + lTop.intercept;
       const baseTilt = -lTop.slope;
       const centerOffX = -0.0602 * refinedW;
       const barMinW = Math.max(4, Math.round(refinedW * 0.011));
       const barMaxW = Math.max(12, Math.round(refinedW * 0.036));
-      const marginHalf = Math.max(16, Math.round(refinedW * 0.028));
+      const marginHalf = Math.max(16, Math.round(refinedW * 0.030));
       const yMin = Math.max(4, Math.round(topAtL - 0.06 * refinedH));
-      const yMax = Math.min(dh - 4, Math.round(topAtL + 1.05 * refinedH));
+      const yMax = Math.min(dh - 4, Math.round(topAtL + 1.06 * refinedH));
       const rawBars = [];
       let curBand = null;
       const vGap = Math.max(2, Math.round(refinedH * 0.010));
@@ -17256,7 +17428,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           const v = sampleNorm(x, y);
           const aboveV = sampleNorm(x, y - vGap);
           const belowV = sampleNorm(x, y + vGap);
-          const isDarkBarPx = v < 165 && (aboveV - v > 28 || belowV - v > 28 || v < 110);
+          const isDarkBarPx = v < 185 && (aboveV - v > 22 || belowV - v > 22 || v < 120);
           if (isDarkBarPx) {
             if (runS < 0) runS = x;
           } else if (runS >= 0) {
@@ -17271,11 +17443,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         }
         if (bestRun) {
           if (curBand && y - curBand.lastY <= 2 && Math.abs(bestRun.cx - curBand.lastCx) <= Math.max(4, barMinW)) {
-            curBand.sumX += bestRun.cx;
-            curBand.sumY += y;
-            curBand.cnt += 1;
-            curBand.lastY = y;
-            curBand.lastCx = bestRun.cx;
+            curBand.sumX += bestRun.cx; curBand.sumY += y; curBand.cnt += 1; curBand.lastY = y; curBand.lastCx = bestRun.cx;
           } else {
             if (curBand) rawBars.push({ x: curBand.sumX / curBand.cnt, y: curBand.sumY / curBand.cnt, h: curBand.cnt });
             curBand = { sumX: bestRun.cx, sumY: y, cnt: 1, lastY: y, lastCx: bestRun.cx };
@@ -17285,7 +17453,6 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       if (curBand) rawBars.push({ x: curBand.sumX / curBand.cnt, y: curBand.sumY / curBand.cnt, h: curBand.cnt });
       if (rawBars.length < 10) return null;
 
-      // RANSAC straight line on timing bar centers (immune to handwritten digits in left margin)
       const tolX = Math.max(2.6, refinedW * 0.0048);
       let bestLine = null, bestInliers = [];
       for (let i = 0; i < rawBars.length; i++) {
@@ -17296,22 +17463,17 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           if (Math.abs(sl - baseTilt) > 0.14) continue;
           const ic = rawBars[i].x - sl * rawBars[i].y;
           const inl = rawBars.filter((p) => Math.abs(p.x - (sl * p.y + ic)) <= tolX);
-          if (inl.length > bestInliers.length) {
-            bestInliers = inl;
-            bestLine = { slope: sl, intercept: ic };
-          }
+          if (inl.length > bestInliers.length) { bestInliers = inl; bestLine = { slope: sl, intercept: ic }; }
         }
       }
       if (!bestLine || bestInliers.length < 12) return null;
       const refit = fitRobustLine(bestInliers, false);
       if (!refit) return null;
 
-      // Comb-filter match 25 bubble rows (yRow1..yRow25) onto detected Left Timing Bars!
       const expDy = (PDF_ROW_DY / PDF_BOX.h) * refinedH;
       const expY0 = topAtL + ((PDF_ROW_Y0 - PDF_BOX.y0) / PDF_BOX.h) * refinedH;
-      const expY25 = expY0 + 24 * expDy;
       let bestComb = null;
-      for (let mDy = 0.94; mDy <= 1.06; mDy += 0.003) {
+      for (let mDy = 0.92; mDy <= 1.08; mDy += 0.003) {
         const dyTry = expDy * mDy;
         const shiftMin = -Math.max(8, Math.round(expDy * 0.95));
         const shiftMax = Math.max(8, Math.round(expDy * 0.95));
@@ -17325,10 +17487,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
               const d = Math.abs(b.y - ry);
               if (d < minD) minD = d;
             }
-            if (minD <= Math.max(2.8, expDy * 0.28)) {
-              hits++;
-              errSum += minD * minD;
-            }
+            if (minD <= Math.max(2.8, expDy * 0.28)) { hits++; errSum += minD * minD; }
           }
           const score = hits * 10 - errSum * 0.25 - Math.abs(mDy - 1) * 40 - Math.abs(sh) * 0.08;
           if (!bestComb || score > bestComb.score) {
@@ -17339,21 +17498,16 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       const yBotLeft = (bestComb && bestComb.hits >= 16)
         ? (bestComb.yRow25 + ((PDF_BOX.y1 - (PDF_ROW_Y0 + 24 * PDF_ROW_DY)) / PDF_BOX.h) * refinedH)
         : null;
-      return {
-        slopeXvsY: refit.slope,
-        yBotLeft,
-        hits: bestComb ? bestComb.hits : 0
-      };
+      return { slopeXvsY: refit.slope, yBotLeft, hits: bestComb ? bestComb.hits : 0 };
     }
     const timingTrack = detectLeftTimingTrack();
 
-    // Constrained Straight-Line Bottom Edge: tight search avoids jumping up onto Row 25 dark bubbles!
     const botPts = [];
     const expectedHAtLeft = timingTrack && timingTrack.yBotLeft
       ? (timingTrack.yBotLeft - (lTop.slope * xL_head + lTop.intercept))
       : refinedH;
-    const radBotUp = Math.max(4, Math.round(refinedH * 0.015));
-    const radBotDown = Math.max(5, Math.round(refinedH * 0.022));
+    const radBotUp = Math.max(5, Math.round(refinedH * 0.024));
+    const radBotDown = Math.max(6, Math.round(refinedH * 0.030));
     for (let i = 0; i < 16; i++) {
       const frac = i < 8 ? (0.04 + (i / 7) * 0.42) : (0.54 + ((i - 8) / 7) * 0.42);
       const px = xL_head + frac * refinedW;
@@ -17361,16 +17515,14 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       let bestBy = baseY, bestBs = -1e9;
       for (let d = -radBotUp; d <= radBotDown; d++) {
         const y = baseY + d;
-        const lineVal = sampleNorm(px, y);
-        const below1 = sampleNorm(px, y + 2);
-        const below2 = sampleNorm(px, y + 3);
-        const belowNear = Math.max(below1, below2);
-        const above = (sampleNorm(px, y - 2) + sampleNorm(px, y - 4)) * 0.5;
-        const bandWeight = frac < 0.5 ? 0.72 : 0.22;
-        let sc = (belowNear - lineVal) * 1.15 + Math.min(75, Math.max(-25, belowNear - above)) * bandWeight - Math.abs(d) * 0.6;
-        if (belowNear < 175) sc -= 150;
-        if (above < 105) sc -= 130; // Ignore filled Row 25 bubbles right above hairline bottom border
-        if (lineVal > 195) sc -= 80;
+        const lineVal = Math.min(sampleNorm(px, y), sampleNorm(px, y - 1), sampleNorm(px, y + 1));
+        const belowNear = Math.max(sampleSmooth(px, y + 3), sampleSmooth(px, y + 5));
+        const aboveBg = (sampleSmooth(px, y - 3) + sampleSmooth(px, y - 5)) * 0.5;
+        const bandWeight = frac < 0.5 ? 0.78 : 0.25;
+        let sc = (belowNear - lineVal) * 1.15 + Math.min(75, Math.max(-25, belowNear - aboveBg)) * bandWeight - Math.abs(d) * 0.55;
+        if (belowNear < pageW2 - 78) sc -= 140;
+        if (aboveBg < 105) sc -= 130;
+        if (belowNear - lineVal < 3 && lineVal > pageW2 - 12) sc -= 35;
         if (sc > bestBs) { bestBs = sc; bestBy = y; }
       }
       botPts.push({ x: px, y: bestBy });
@@ -17378,7 +17530,6 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const lBot = fitRobustLine(botPts, true);
     if (!lBot) return null;
 
-    // Straight-Line Sweep Vertical Border Tracker anchored at Header X (Timing Track guides Left edge only; Right edge supports symmetric perspective keystone)
     function trackVerticalEdge(xHeadAnchor, dirOutSign, grayBandMask, customGuideSlope, maxRadFrac, guidePenalty) {
       const yHead = (lTop.slope * xHeadAnchor + lTop.intercept) + refinedH * 0.052;
       const botAtAnchor = lBot.slope * xHeadAnchor + lBot.intercept;
@@ -17396,15 +17547,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           const fracY = 0.095 + (j / (nSt - 1)) * 0.875;
           const py = (lTop.slope * xHeadAnchor + lTop.intercept) + fracY * refinedH;
           const px = xHeadAnchor + sl * (py - yHead);
-          const outW = Math.min(sampleNorm(px + dirOutSign * 3, py), sampleNorm(px + dirOutSign * 5, py));
-          const onLine = sampleNorm(px, py);
-          const inV = (sampleNorm(px - dirOutSign * 2.5, py) + sampleNorm(px - dirOutSign * 4.5, py)) * 0.5;
-          let sc = (outW - onLine) * 1.15;
+          const outW = Math.min(sampleSmooth(px + dirOutSign * 3, py), sampleSmooth(px + dirOutSign * 5, py));
+          const onLine = Math.min(sampleNorm(px, py), sampleNorm(px - dirOutSign, py));
+          const inV = (sampleSmooth(px - dirOutSign * 3, py) + sampleSmooth(px - dirOutSign * 5, py)) * 0.5;
+          let sc = Math.min(55, Math.max(-25, outW - onLine)) * 1.1;
           if (grayBandMask(fracY)) {
-            sc += Math.min(68, Math.max(-35, outW - inV)) * 0.65;
-            if (inV < 85) sc -= 65; // Reject lines falling inside dark filled bubbles!
+            sc += Math.min(60, Math.max(-35, outW - inV)) * 0.72;
+            if (inV < 100) sc -= 80;
           }
-          if (outW < 185) sc -= 130;
+          if (outW < pageW2 - 72) sc -= 120;
           stScores.push(sc);
         }
         stScores.sort((a, b) => a - b);
@@ -17419,8 +17570,8 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const isListenGrayBand = (f) => f < 0.105 || (f > 0.13 && f < 0.27) || (f > 0.49 && f < 0.63) || f > 0.84;
     const isReadGrayBand = (f) => f < 0.105 || (f > 0.31 && f < 0.45) || (f > 0.67 && f < 0.81);
 
-    const lLeft = trackVerticalEdge(xL_head, -1, isListenGrayBand, timingTrack ? timingTrack.slopeXvsY : -lTop.slope, timingTrack ? 0.022 : 0.048, timingTrack ? 1.0 : 0.15);
-    const lRight = trackVerticalEdge(xR_head, 1, isReadGrayBand, -lTop.slope, 0.052, 0.12);
+    const lLeft = trackVerticalEdge(xL_head, -1, isListenGrayBand, timingTrack ? timingTrack.slopeXvsY : -lTop.slope, timingTrack ? 0.022 : 0.048, timingTrack ? 1.0 : 0.22);
+    const lRight = trackVerticalEdge(xR_head, 1, isReadGrayBand, -lTop.slope, 0.050, 0.20);
     if (!lLeft || !lRight) return null;
 
     const pTL = intersectHVLines(lTop, lLeft);
@@ -17430,7 +17581,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     if (!pTL || !pTR || !pBL || !pBR) return null;
 
     const ratio = Math.hypot(pTR.x - pTL.x, pTR.y - pTL.y) / Math.max(20, Math.hypot(pBL.x - pTL.x, pBL.y - pTL.y));
-    if (ratio < 1.15 || ratio > 1.95) return null;
+    if (ratio < 1.12 || ratio > 2.00) return null;
 
     const out = {
       mode: 'ets-grid',
@@ -17440,7 +17591,6 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       br: { x: pBR.x / scale, y: pBR.y / scale }
     };
 
-    // Track crisp white center-gutter borders independently guided by symmetric midpoint slant
     const midSlope = (lLeft.slope + lRight.slope) * 0.5;
     const lListenR = trackVerticalEdge(xLR_head, 1, isListenGrayBand, midSlope, 0.022, 0.45);
     const lReadL = trackVerticalEdge(xRL_head, -1, isReadGrayBand, midSlope, 0.022, 0.45);
@@ -17477,10 +17627,507 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     return out;
   }
 
+  // Pick the highest-fingerprint candidate from a top-K diverse list and refine it
+  function pickAndRefineBest(candList, rawGray, normGray, dw, dh, scale) {
+    if (!candList || !candList.length) return null;
+    let bestC = candList[0], bestFp = -1e9;
+    for (let i = 0; i < candList.length; i++) {
+      const q = coarseCandToQuad(candList[i], scale);
+      const fpN = scoreCandidateOnRawGray(normGray, dw, dh, q, scale);
+      const fpR = scoreCandidateOnRawGray(rawGray, dw, dh, q, scale);
+      const sc = Math.max(fpN.total, fpR.total);
+      if (sc > bestFp) {
+        bestFp = sc;
+        bestC = candList[i];
+      }
+    }
+    return refineEtsCandidate(normGray, dw, dh, scale, bestC);
+  }
+
+  // Fallback Stage B1 (v8.4): Intensity-run header scanner keeping TOP-5 diverse candidates ranked by raw-gray fingerprint!
+  function detectOfficialEtsGridCorners(normGray, rawGray, dw, dh, scale) {
+    const tw = Math.min(540, dw);
+    const s = tw / dw;
+    const th = Math.round(dh * s);
+    const small = new Float32Array(tw * th);
+    for (let y = 0; y < th; y++) {
+      const sy = Math.min(dh - 1, Math.round(y / s));
+      for (let x = 0; x < tw; x++) {
+        small[y * tw + x] = normGray[sy * dw + Math.min(dw - 1, Math.round(x / s))];
+      }
+    }
+
+    const smooth = new Float32Array(tw * th);
+    for (let y = 0; y < th; y++) {
+      const ym = Math.max(0, y - 1), yp = Math.min(th - 1, y + 1);
+      for (let x = 0; x < tw; x++) {
+        const xm = Math.max(0, x - 1), xp = Math.min(tw - 1, x + 1);
+        smooth[y * tw + x] = (
+          small[ym * tw + xm] + small[ym * tw + x] + small[ym * tw + xp] +
+          small[y * tw + xm] + small[y * tw + x] + small[y * tw + xp] +
+          small[yp * tw + xm] + small[yp * tw + x] + small[yp * tw + xp]
+        ) / 9;
+      }
+    }
+
+    const sampleSmall = (x, y) => (x < 0 || x >= tw || y < 0 || y >= th) ? 255 : small[(y | 0) * tw + (x | 0)];
+    const sampleSmoothSmall = (x, y) => (x < 0 || x >= tw || y < 0 || y >= th) ? 255 : smooth[(y | 0) * tw + (x | 0)];
+    const pctOf = (arr, q) => {
+      if (!arr.length) return 255;
+      const a = arr.slice().sort((u, v) => u - v);
+      return a[Math.min(a.length - 1, Math.floor(a.length * q))];
+    };
+    const pct75 = (arr) => pctOf(arr, 0.75);
+
+    const pSamples = [];
+    for (let i = 0; i < smooth.length; i += 17) pSamples.push(smooth[i]);
+    const pageW = Math.max(212, Math.min(254, pctOf(pSamples, 0.90)));
+    const pageWFaded = Math.max(220, Math.min(254, pctOf(pSamples, 0.94)));
+    const maxRunGapBase = Math.max(2, Math.round(tw * 0.0055));
+
+    const BAND_FRACS = [0.197, 0.376, 0.554, 0.733, 0.911];
+    const rowVals = new Float32Array(tw);
+    const rowRaw = new Float32Array(tw);
+    const rowSm = new Float32Array(tw);
+    const rowMask = new Uint8Array(tw);
+
+    function scanWithThresholds(thrList, useWiderRowSmooth) {
+      const topList = [];
+      const maxRunGap = useWiderRowSmooth ? maxRunGapBase : 1;
+      for (let deg = -11; deg <= 11; deg += 1) {
+        const slope = Math.tan((deg * Math.PI) / 180);
+        for (let yr = Math.round(th * 0.015); yr < Math.round(th * 0.62); yr += 2) {
+          for (let x = 0; x < tw; x++) {
+            const yy = Math.round(yr + (x - tw * 0.5) * slope);
+            rowVals[x] = sampleSmoothSmall(x, yy);
+            rowRaw[x] = sampleSmall(x, yy);
+          }
+          if (useWiderRowSmooth) {
+            for (let x = 0; x < tw; x++) {
+              let sum = 0, cnt = 0;
+              const x0 = Math.max(0, x - 3), x1 = Math.min(tw - 1, x + 3);
+              for (let k = x0; k <= x1; k++) { sum += rowVals[k]; cnt++; }
+              rowSm[x] = sum / cnt;
+            }
+          } else {
+            for (let x = 0; x < tw; x++) {
+              const xm = x > 0 ? x - 1 : 0;
+              const xp = x < tw - 1 ? x + 1 : tw - 1;
+              rowSm[x] = 0.25 * rowVals[xm] + 0.5 * rowVals[x] + 0.25 * rowVals[xp];
+            }
+          }
+
+          for (let tIdx = 0; tIdx < thrList.length; tIdx++) {
+            const thr = thrList[tIdx];
+            for (let x = 0; x < tw; x++) rowMask[x] = (rowSm[x] <= thr) ? 1 : 0;
+
+            const runs = [];
+            let x = 0;
+            while (x < tw) {
+              if (!rowMask[x]) { x++; continue; }
+              const xStart = x;
+              let gap = 0, lastOn = x;
+              x++;
+              while (x < tw) {
+                if (rowMask[x]) { lastOn = x; gap = 0; }
+                else { gap++; if (gap > maxRunGap) break; }
+                x++;
+              }
+              if (lastOn - xStart >= tw * 0.14) runs.push([xStart, lastOn]);
+            }
+
+            const pairs = [];
+            for (let i = 0; i < runs.length - 1; i++) {
+              pairs.push([runs[i][0], runs[i][1], runs[i + 1][0], runs[i + 1][1]]);
+            }
+            for (let i = 0; i < runs.length; i++) {
+              const [S0, S1] = runs[i];
+              const sW = S1 - S0;
+              if (sW < tw * 0.34 || sW > tw * 0.99) continue;
+              const mid = 0.5 * (S0 + S1);
+              const gLo = Math.max(S0 + 10, Math.round(mid - sW * 0.055));
+              const gHi = Math.min(S1 - 10, Math.round(mid + sW * 0.055));
+              let peakX = Math.round(mid), peakV = -1;
+              for (let gx = gLo; gx <= gHi; gx++) {
+                if (rowRaw[gx] > peakV) { peakV = rowRaw[gx]; peakX = gx; }
+              }
+              if (peakV < pageW - 44) continue;
+              const hLarr = [], hRarr = [];
+              for (let k = 0; k < 5; k++) {
+                hLarr.push(rowVals[Math.round(S0 + sW * (0.12 + k * 0.065))]);
+                hRarr.push(rowVals[Math.round(S0 + sW * (0.62 + k * 0.065))]);
+              }
+              const hMed = 0.5 * (pctOf(hLarr, 0.5) + pctOf(hRarr, 0.5));
+              if (peakV - hMed < Math.max(7.0, (pageW - hMed) * 0.32)) continue;
+              const splitThr = hMed + 0.55 * (peakV - hMed);
+              let gL = peakX, gR = peakX;
+              while (gL > S0 + 8 && rowRaw[gL - 1] >= splitThr) gL--;
+              while (gR < S1 - 8 && rowRaw[gR + 1] >= splitThr) gR++;
+              if (gR - gL <= Math.max(10, sW * 0.045)) {
+                pairs.push([S0, Math.max(S0 + 5, gL - 1), Math.min(S1 - 5, gR + 1), S1]);
+              }
+            }
+
+            for (let pIdx = 0; pIdx < pairs.length; pIdx++) {
+              const [L0, L1, R0, R1] = pairs[pIdx];
+              const wL = L1 - L0, wR = R1 - R0;
+              const totalW = R1 - L0;
+              const gap = R0 - L1;
+              if (totalW < tw * 0.34 || totalW > tw * 0.99) continue;
+              if (gap < Math.max(1.5, totalW * 0.004) || gap > totalW * 0.056) continue;
+              if (Math.abs(wL - wR) / Math.max(wL, wR) > 0.12) continue;
+
+              const totalH = totalW * (PDF_BOX.h / PDF_BOX.w);
+              if (L0 >= 7) {
+                const outL = Math.max(
+                  sampleSmoothSmall(L0 - 4, yr + (L0 - tw * 0.5) * slope),
+                  sampleSmoothSmall(L0 - 7, yr + (L0 - tw * 0.5) * slope)
+                );
+                if (outL < pageW - 55) continue;
+              }
+              if (R1 <= tw - 8) {
+                const outR = Math.max(
+                  sampleSmoothSmall(R1 + 4, yr + (R1 - tw * 0.5) * slope),
+                  sampleSmoothSmall(R1 + 7, yr + (R1 - tw * 0.5) * slope)
+                );
+                if (outR < pageW - 55) continue;
+              }
+
+              let hdrTopYr = yr, hdrScore = -1e9;
+              const xsHdrL = [0.10, 0.22, 0.34, 0.42].map((f) => L0 + totalW * f);
+              const xsHdrR = [0.58, 0.66, 0.78, 0.90].map((f) => L0 + totalW * f);
+              const hDepth = Math.max(5, totalH * 0.055);
+              for (let dy = -Math.round(totalH * 0.11); dy <= Math.round(totalH * 0.03); dy++) {
+                const pL = [], pR = [];
+                for (let p = 0; p < 4; p++) {
+                  const xl = xsHdrL[p], yyl = yr + dy + (xl - tw * 0.5) * slope;
+                  const abL = Math.min(sampleSmoothSmall(xl, yyl - 3), sampleSmoothSmall(xl, yyl - 6));
+                  const blL = Math.max(sampleSmoothSmall(xl, yyl + 3.5), sampleSmoothSmall(xl, yyl + hDepth));
+                  pL.push(Math.min(48, Math.max(-25, abL - blL)) + Math.min(30, Math.max(-15, abL - sampleSmall(xl, yyl))) * 0.45);
+
+                  const xr = xsHdrR[p], yyr = yr + dy + (xr - tw * 0.5) * slope;
+                  const abR = Math.min(sampleSmoothSmall(xr, yyr - 3), sampleSmoothSmall(xr, yyr - 6));
+                  const blR = Math.max(sampleSmoothSmall(xr, yyr + 3.5), sampleSmoothSmall(xr, yyr + hDepth));
+                  pR.push(Math.min(48, Math.max(-25, abR - blR)) + Math.min(30, Math.max(-15, abR - sampleSmall(xr, yyr))) * 0.45);
+                }
+                pL.sort((a, b) => a - b);
+                pR.sort((a, b) => a - b);
+                const scL = (pL[1] + pL[2] + pL[3]) / 3;
+                const scR = (pR[1] + pR[2] + pR[3]) / 3;
+                const sc = 0.5 * (scL + scR) - Math.abs(scL - scR) * 0.25;
+                if (sc > hdrScore) { hdrScore = sc; hdrTopYr = yr + dy; }
+              }
+              if (hdrTopYr + totalH >= th * 1.03) continue;
+
+              const abValsL = [], abValsR = [], hdrTopL = [], hdrBotL = [], hdrTopR = [], hdrBotR = [], blVals = [];
+              const yTopCheck = hdrTopYr - Math.max(3, totalH * 0.036);
+              const yTopCheck2 = hdrTopYr - Math.max(5, totalH * 0.062);
+              const yHdr1 = hdrTopYr + Math.max(2.5, totalH * 0.030);
+              const yHdr2 = hdrTopYr + Math.max(5, totalH * 0.072);
+              const yBotCheck = Math.min(th - 2, hdrTopYr + totalH + Math.max(3, totalH * 0.030));
+              for (let k = 0; k < 6; k++) {
+                const txL = L0 + wL * ((k + 0.5) / 6);
+                const txR = R0 + wR * ((k + 0.5) / 6);
+                abValsL.push(sampleSmoothSmall(txL, yTopCheck + (txL - tw * 0.5) * slope));
+                abValsL.push(sampleSmoothSmall(txL, yTopCheck2 + (txL - tw * 0.5) * slope));
+                abValsR.push(sampleSmoothSmall(txR, yTopCheck + (txR - tw * 0.5) * slope));
+                abValsR.push(sampleSmoothSmall(txR, yTopCheck2 + (txR - tw * 0.5) * slope));
+                hdrTopL.push(sampleSmoothSmall(txL, yHdr1 + (txL - tw * 0.5) * slope));
+                hdrBotL.push(sampleSmoothSmall(txL, yHdr2 + (txL - tw * 0.5) * slope));
+                hdrTopR.push(sampleSmoothSmall(txR, yHdr1 + (txR - tw * 0.5) * slope));
+                hdrBotR.push(sampleSmoothSmall(txR, yHdr2 + (txR - tw * 0.5) * slope));
+                blVals.push(sampleSmoothSmall(txL, yBotCheck + (txL - tw * 0.5) * slope), sampleSmoothSmall(txR, yBotCheck + (txR - tw * 0.5) * slope));
+              }
+              const abAll = abValsL.concat(abValsR);
+              const aboveWhite = pct75(abAll);
+              const aboveP30L = pctOf(abValsL, 0.35);
+              const aboveP30R = pctOf(abValsR, 0.35);
+              const hdrMedL = Math.max(pctOf(hdrTopL, 0.50), pctOf(hdrBotL, 0.50));
+              const hdrMedR = Math.max(pctOf(hdrTopR, 0.50), pctOf(hdrBotR, 0.50));
+              const hdrDropL = pctOf(abValsL, 0.75) - hdrMedL;
+              const hdrDropR = pctOf(abValsR, 0.75) - hdrMedR;
+              const hdrDrop = 0.5 * (hdrDropL + hdrDropR);
+              const belowWhite = pct75(blVals);
+
+              if (aboveWhite < pageW - 45 || aboveP30L < pageW - 42 || aboveP30R < pageW - 42) continue;
+              if (hdrDropL < 3.5 || hdrDropR < 3.5 || hdrDrop < 5.0) continue;
+              if (hdrTopYr + totalH < th - 5 && belowWhite < pageW - 58) continue;
+
+              const rawDiffs = [];
+              for (let b = 0; b < 5; b++) {
+                const fracY = BAND_FRACS[b];
+                const valsL = [], valsR = [];
+                for (let k = 0; k < 6; k++) {
+                  const txL = L0 + wL * (0.10 + (k / 5) * 0.80);
+                  const txR = R0 + wR * (0.10 + (k / 5) * 0.80);
+                  for (let dy = -2; dy <= 2; dy += 2) {
+                    valsL.push(sampleSmoothSmall(txL, hdrTopYr + totalH * fracY + (txL - tw * 0.5) * slope + dy));
+                    valsR.push(sampleSmoothSmall(txR, hdrTopYr + totalH * fracY + (txR - tw * 0.5) * slope + dy));
+                  }
+                }
+                rawDiffs.push(pct75(valsR) - pct75(valsL));
+              }
+              const evenMean = (rawDiffs[0] + rawDiffs[2] + rawDiffs[4]) / 3;
+              const oddMean = (rawDiffs[1] + rawDiffs[3]) / 2;
+              const biasLR = Math.max(-28, Math.min(28, 0.5 * (evenMean + oddMean)));
+              const diffs = rawDiffs.map((d, b) => (b % 2 === 0) ? (d - biasLR) : -(d - biasLR));
+
+              const posThr = Math.max(2.5, hdrDrop * 0.16);
+              const posBands = diffs.filter((d) => d > posThr).length;
+              const antiSum = diffs.reduce((acc, d) => acc + d, 0);
+              const minAnti = Math.max(18.0, hdrDrop * 0.90);
+              if (!((posBands >= 4 && antiSum >= minAnti) || (posBands === 5 && antiSum >= 14.0))) continue;
+
+              const gMidTop = (L1 + R0) * 0.5;
+              const gRad = Math.max(3, Math.round(totalW * 0.025));
+              const gutterVals = [];
+              for (let gStep = 0; gStep < 6; gStep++) {
+                const gy = hdrTopYr + totalH * (0.06 + gStep * 0.17);
+                const gx = gMidTop - (gy - hdrTopYr) * slope;
+                let maxG = 0;
+                for (let dx = -gRad; dx <= gRad; dx++) {
+                  const gv = sampleSmall(gx + dx, gy);
+                  if (gv > maxG) maxG = gv;
+                }
+                gutterVals.push(maxG);
+              }
+              const gutterWhite = pct75(gutterVals);
+              if (gutterWhite < pageW - 40) continue;
+
+              const aboveClean = 0.5 * (aboveP30L + aboveP30R);
+              const score = hdrScore * 2.2 + antiSum * 2.5 + posBands * 34 + (gutterWhite - (pageW - 40)) * 1.1 + (aboveClean - (pageW - 42)) * 1.2 + (belowWhite - 190) * 0.4 + totalW * 0.22;
+              pushDiverseCandidate(topList, { score, deg, slope, L0: L0 / s, L1: L1 / s, R0: R0 / s, R1: R1 / s, yrTop: hdrTopYr / s, estW: totalW / s, estH: totalH / s, pageW, hdrDrop }, 5);
+            }
+          }
+        }
+      }
+      return topList;
+    }
+
+    const pass1List = scanWithThresholds([pageW - 22, pageW - 14], false);
+    let bestPass1Fp = -1e9;
+    for (let i = 0; i < pass1List.length; i++) {
+      const q = coarseCandToQuad(pass1List[i], scale);
+      const fp = Math.max(
+        scoreCandidateOnRawGray(normGray, dw, dh, q, scale).total,
+        scoreCandidateOnRawGray(rawGray, dw, dh, q, scale).total
+      );
+      if (fp > bestPass1Fp) bestPass1Fp = fp;
+    }
+    const allCands = pass1List.slice();
+    // Always run Pass 2 (faded photocopy pass with wider thresholds) if Pass 1 had low fingerprint OR low contrast!
+    if (!pass1List.length || bestPass1Fp < 720 || pass1List[0].hdrDrop < 16) {
+      const p2 = scanWithThresholds([pageWFaded - 10.0, pageWFaded - 6.0], true);
+      for (let i = 0; i < p2.length; i++) pushDiverseCandidate(allCands, p2[i], 6);
+    }
+    if (!allCands.length) return null;
+    return pickAndRefineBest(allCands, rawGray, normGray, dw, dh, scale);
+  }
+
+  // Fallback Stage B3 (v8.4): Tight-Aperture Multiplicative-Shadow-Invariant Step-Difference Scanner (handles diagonal shadow penumbra!)
+  function detectOfficialEtsByShadowInvariantStep(rawGray, localNorm, dw, dh, scale) {
+    const tw = Math.min(540, dw);
+    const s = tw / dw;
+    const th = Math.round(dh * s);
+    const small = new Float32Array(tw * th);
+    for (let y = 0; y < th; y++) {
+      const sy = Math.min(dh - 1, Math.round(y / s));
+      for (let x = 0; x < tw; x++) {
+        small[y * tw + x] = rawGray[sy * dw + Math.min(dw - 1, Math.round(x / s))];
+      }
+    }
+    const smooth = new Float32Array(tw * th);
+    for (let y = 0; y < th; y++) {
+      const ym = Math.max(0, y - 1), yp = Math.min(th - 1, y + 1);
+      for (let x = 0; x < tw; x++) {
+        const xm = Math.max(0, x - 1), xp = Math.min(tw - 1, x + 1);
+        smooth[y * tw + x] = (
+          small[ym * tw + xm] + small[ym * tw + x] + small[ym * tw + xp] +
+          small[y * tw + xm] + small[y * tw + x] + small[y * tw + xp] +
+          small[yp * tw + xm] + small[yp * tw + x] + small[yp * tw + xp]
+        ) / 9;
+      }
+    }
+    const ss = (x, y) => (x < 0 || x >= tw || y < 0 || y >= th) ? -1 : smooth[(y | 0) * tw + (x | 0)];
+    const sr = (x, y) => (x < 0 || x >= tw || y < 0 || y >= th) ? -1 : small[(y | 0) * tw + (x | 0)];
+    const pctOf = (arr, q) => {
+      if (!arr.length) return 0;
+      const a = arr.slice().sort((u, v) => u - v);
+      return a[Math.min(a.length - 1, Math.floor(a.length * q))];
+    };
+
+    const BAND_FRACS = [0.197, 0.376, 0.554, 0.733, 0.911];
+    const dRaw = new Float32Array(tw);
+    const dSm = new Float32Array(tw);
+    const mask = new Uint8Array(tw);
+    const dThrs = [0.10, 0.052];
+    const topList = [];
+
+    for (let deg = -11; deg <= 11; deg += 1) {
+      const slope = Math.tan((deg * Math.PI) / 180);
+      for (let yr = Math.round(th * 0.02); yr < Math.round(th * 0.62); yr += 2) {
+        // Tight vertical aperture (yy-3 vs yy+3/+6): diagonal shadow penumbra changes <4% over 6px while gray header drops 10-40%!
+        for (let x = 0; x < tw; x++) {
+          const yy = Math.round(yr + (x - tw * 0.5) * slope);
+          const a1 = ss(x, yy - 3), a2 = ss(x, yy - 5);
+          const b1 = ss(x, yy + 3), b2 = ss(x, yy + 6);
+          if (a1 < 25 || a2 < 25 || b1 < 0 || b2 < 0) { dRaw[x] = 0; continue; }
+          const ab = Math.min(a1, a2);
+          const bl = Math.max(b1, b2);
+          dRaw[x] = (ab - bl) / Math.max(40, ab);
+        }
+        for (let x = 0; x < tw; x++) {
+          const xm = x > 0 ? x - 1 : 0, xp = x < tw - 1 ? x + 1 : tw - 1;
+          dSm[x] = 0.25 * dRaw[xm] + 0.5 * dRaw[x] + 0.25 * dRaw[xp];
+        }
+
+        for (let tIdx = 0; tIdx < dThrs.length; tIdx++) {
+          const thr = dThrs[tIdx];
+          for (let x = 0; x < tw; x++) mask[x] = (dSm[x] >= thr) ? 1 : 0;
+          const runs = [];
+          let x = 0;
+          while (x < tw) {
+            if (!mask[x]) { x++; continue; }
+            const xs = x;
+            let gap = 0, lastOn = x;
+            x++;
+            while (x < tw) {
+              if (mask[x]) { lastOn = x; gap = 0; }
+              else { gap++; if (gap > 5) break; } // Bridges narrow diagonal shadow exit dip; center gutter split below separates L & R!
+              x++;
+            }
+            if (lastOn - xs >= tw * 0.14) runs.push([xs, lastOn]);
+          }
+
+          const pairs = [];
+          for (let i = 0; i < runs.length - 1; i++) pairs.push([runs[i][0], runs[i][1], runs[i + 1][0], runs[i + 1][1]]);
+          for (let i = 0; i < runs.length; i++) {
+            const [S0, S1] = runs[i];
+            const sW = S1 - S0;
+            if (sW < tw * 0.34 || sW > tw * 0.99) continue;
+            const mid = 0.5 * (S0 + S1);
+            const gLo = Math.max(S0 + 10, Math.round(mid - sW * 0.055));
+            const gHi = Math.min(S1 - 10, Math.round(mid + sW * 0.055));
+            // Find crisp bright white center gutter peak inside header band (yy+5..yy+8), immune to diagonal shadow edges!
+            let peakX = Math.round(mid), peakContrast = -1e9;
+            for (let gx = gLo; gx <= gHi; gx++) {
+              const gyy = Math.round(yr + (gx - tw * 0.5) * slope) + 6;
+              const gv = Math.max(sr(gx, gyy), sr(gx, gyy + 2));
+              const sL = ss(gx - 7, gyy), sR = ss(gx + 7, gyy);
+              if (gv > 25 && sL > 0 && sR > 0) {
+                const c = (gv - 0.5 * (sL + sR)) / Math.max(40, gv);
+                if (c > peakContrast) { peakContrast = c; peakX = gx; }
+              }
+            }
+            if (peakContrast > 0.035) {
+              const gyy0 = Math.round(yr + (peakX - tw * 0.5) * slope) + 6;
+              const sideBase = 0.5 * (ss(peakX - 7, gyy0) + ss(peakX + 7, gyy0));
+              const peakV = Math.max(sr(peakX, gyy0), sr(peakX, gyy0 + 2));
+              const splitThr = sideBase + 0.45 * (peakV - sideBase);
+              let gL = peakX, gR = peakX;
+              while (gL > S0 + 8 && Math.max(sr(gL - 1, gyy0), sr(gL - 1, gyy0 + 2)) >= splitThr) gL--;
+              while (gR < S1 - 8 && Math.max(sr(gR + 1, gyy0), sr(gR + 1, gyy0 + 2)) >= splitThr) gR++;
+              if (gR - gL <= Math.max(10, sW * 0.045)) {
+                pairs.push([S0, Math.max(S0 + 5, gL - 1), Math.min(S1 - 5, gR + 1), S1]);
+              }
+            }
+            // Also try dRaw-minimum split (immune to sharp vertical shadow edge right beside center gutter like case_059!)
+            let minX = Math.round(mid), minD = 9;
+            for (let gx = gLo; gx <= gHi; gx++) {
+              if (dRaw[gx] < minD) { minD = dRaw[gx]; minX = gx; }
+            }
+            if (minD < thr * 0.65) {
+              let gL = minX, gR = minX;
+              while (gL > S0 + 8 && dRaw[gL - 1] < thr * 0.78) gL--;
+              while (gR < S1 - 8 && dRaw[gR + 1] < thr * 0.78) gR++;
+              if (gR - gL <= Math.max(10, sW * 0.045)) {
+                pairs.push([S0, Math.max(S0 + 5, gL - 1), Math.min(S1 - 5, gR + 1), S1]);
+              }
+            }
+          }
+
+          for (let pIdx = 0; pIdx < pairs.length; pIdx++) {
+            const [L0, L1, R0, R1] = pairs[pIdx];
+            const wL = L1 - L0, wR = R1 - R0;
+            const totalW = R1 - L0;
+            const gap = R0 - L1;
+            if (totalW < tw * 0.34 || totalW > tw * 0.99) continue;
+            if (gap < Math.max(1.5, totalW * 0.004) || gap > totalW * 0.056) continue;
+            if (Math.abs(wL - wR) / Math.max(wL, wR) > 0.12) continue;
+
+            const totalH = totalW * (PDF_BOX.h / PDF_BOX.w);
+            if (yr + totalH >= th * 1.03) continue;
+
+            const logL = [], logR = [];
+            for (let b = 0; b < 5; b++) {
+              const vL = [], vR = [];
+              for (let k = 0; k < 6; k++) {
+                const txL = L0 + wL * (0.10 + (k / 5) * 0.80);
+                const txR = R0 + wR * (0.10 + (k / 5) * 0.80);
+                const yL = yr + totalH * BAND_FRACS[b] + (txL - tw * 0.5) * slope;
+                const yR = yr + totalH * BAND_FRACS[b] + (txR - tw * 0.5) * slope;
+                for (let dy = -2; dy <= 2; dy += 2) {
+                  const a = ss(txL, yL + dy), c = ss(txR, yR + dy);
+                  if (a > 0) vL.push(a);
+                  if (c > 0) vR.push(c);
+                }
+              }
+              logL.push(Math.log(Math.max(20, pctOf(vL, 0.75))));
+              logR.push(Math.log(Math.max(20, pctOf(vR, 0.75))));
+            }
+            const trans = [
+              logL[1] - logL[0], logL[1] - logL[2], logL[3] - logL[2], logL[3] - logL[4],
+              logR[0] - logR[1], logR[2] - logR[1], logR[2] - logR[3], logR[4] - logR[3]
+            ];
+            const posT = trans.filter((t) => t > 0.012).length;
+            const sumT = trans.reduce((a, b) => a + Math.min(0.28, Math.max(-0.14, b)), 0);
+            if (posT < 5 || sumT < 0.14) continue;
+
+            const gMidTop = (L1 + R0) * 0.5;
+            const gRad = Math.max(3, Math.round(totalW * 0.025));
+            let gutHits = 0, gutSum = 0;
+            for (let gStep = 0; gStep < 6; gStep++) {
+              const gy = yr + totalH * (0.06 + gStep * 0.17);
+              const gx = gMidTop - (gy - yr) * slope;
+              let bestG = 0, bestGx = gx;
+              for (let dx = -gRad; dx <= gRad; dx++) {
+                const gv = sr(gx + dx, gy);
+                if (gv > bestG) { bestG = gv; bestGx = gx + dx; }
+              }
+              const sL = ss(bestGx - 6, gy), sR = ss(bestGx + 6, gy);
+              if (bestG > 25 && sL > 0 && sR > 0) {
+                const rel = (bestG - 0.5 * (sL + sR)) / Math.max(40, bestG);
+                if (rel > 0.025) { gutHits++; gutSum += Math.min(0.30, rel); }
+              }
+            }
+            if (gutHits < 4) continue;
+
+            const hL = [], hR = [];
+            for (let k = 0; k < 5; k++) {
+              hL.push(dSm[Math.round(L0 + wL * (0.12 + k * 0.19))]);
+              hR.push(dSm[Math.round(R0 + wR * (0.12 + k * 0.19))]);
+            }
+            const hdrScore = 0.5 * (pctOf(hL, 0.5) + pctOf(hR, 0.5));
+            if (hdrScore < 0.025) continue;
+
+            const score = posT * 40 + sumT * 280 + gutHits * 18 + gutSum * 160 + Math.min(0.35, hdrScore) * 260 + totalW * 0.15;
+            pushDiverseCandidate(topList, { score, deg, slope, L0: L0 / s, L1: L1 / s, R0: R0 / s, R1: R1 / s, yrTop: yr / s, estW: totalW / s, estH: totalH / s, pageW: 248, hdrDrop: hdrScore * 240 }, 5);
+          }
+        }
+      }
+    }
+    if (!topList.length) return null;
+    return pickAndRefineBest(topList, rawGray, localNorm, dw, dh, scale);
+  }
+
   // --------------------------------------------------------------------------
-  // DUAL AUTO-DETECTOR:
-  //  1) Web A4 Sheet 4 Bullseyes -> projected to Answer Block [0..1000 x 0..655]
-  //  2) Official ETS PDF ("mẫu tô trắc nghiệm.pdf") LISTENING + READING frame
+  // DUAL AUTO-DETECTOR (v8.4):
+  //  1) Web A4 Sheet 4 Bullseyes (raw pass + illumination-normalized faded fallback)
+  //  2) Official ETS PDF Grid Frame:
+  //     B1: Non-bleaching QuadNorm (fast path for all normal & faded sheets)
+  //     B2: Local Shadow-Norm (flattens circular flash hotspots, vignettes & shadow bands)
+  //     B3: Tight-Aperture Step-Diff (cuts straight through diagonal/horizontal/vertical shadow penumbras!)
+  //     All ranked apples-to-apples via 200x131 raw-gray illumination-invariant structural fingerprint!
   // --------------------------------------------------------------------------
   function autoDetectFiducials(canvasEl) {
     const w = canvasEl.width;
@@ -17500,123 +18147,132 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       gray[i] = 0.299 * img[i * 4] + 0.587 * img[i * 4 + 1] + 0.114 * img[i * 4 + 2];
     }
 
-    const stride = dw + 1;
-    const integ = new Float64Array(stride * (dh + 1));
-    for (let y = 0; y < dh; y++) {
-      let rowSum = 0;
-      for (let x = 0; x < dw; x++) {
-        rowSum += gray[y * dw + x];
-        integ[(y + 1) * stride + (x + 1)] = integ[y * stride + (x + 1)] + rowSum;
+    function detectBullseyesOnField(field, relaxed) {
+      const stride = dw + 1;
+      const integ = new Float64Array(stride * (dh + 1));
+      for (let y = 0; y < dh; y++) {
+        let rowSum = 0;
+        for (let x = 0; x < dw; x++) {
+          rowSum += field[y * dw + x];
+          integ[(y + 1) * stride + (x + 1)] = integ[y * stride + (x + 1)] + rowSum;
+        }
       }
-    }
-    function boxMean(x0, y0, x1, y1) {
-      const ax = Math.max(0, Math.floor(x0)), ay = Math.max(0, Math.floor(y0));
-      const bx = Math.min(dw - 1, Math.floor(x1)), by = Math.min(dh - 1, Math.floor(y1));
-      if (bx <= ax || by <= ay) return 255;
-      const area = (bx - ax) * (by - ay);
-      const sum = integ[by * stride + bx] - integ[ay * stride + bx] - integ[by * stride + ax] + integ[ay * stride + ax];
-      return sum / area;
-    }
+      function boxMean(x0, y0, x1, y1) {
+        const ax = Math.max(0, Math.floor(x0)), ay = Math.max(0, Math.floor(y0));
+        const bx = Math.min(dw - 1, Math.floor(x1)), by = Math.min(dh - 1, Math.floor(y1));
+        if (bx <= ax || by <= ay) return 255;
+        const area = (bx - ax) * (by - ay);
+        return (integ[by * stride + bx] - integ[ay * stride + bx] - integ[by * stride + ax] + integ[ay * stride + ax]) / area;
+      }
 
-    function scoreBullseye(cx, cy, rOut, rMid, rIn) {
-      const mIn = boxMean(cx - rIn, cy - rIn, cx + rIn, cy + rIn);
-      if (mIn > 135) return -1e9;
-      const mMidAll = boxMean(cx - rMid, cy - rMid, cx + rMid, cy + rMid);
-      const aIn = (2 * rIn) * (2 * rIn);
-      const aMid = (2 * rMid) * (2 * rMid);
-      const ringWhite = (mMidAll * aMid - mIn * aIn) / Math.max(1, aMid - aIn);
-      if (ringWhite < mIn + 42) return -1e9;
-      const mOutAll = boxMean(cx - rOut, cy - rOut, cx + rOut, cy + rOut);
-      const aOut = (2 * rOut) * (2 * rOut);
-      const outerBlack = (mOutAll * aOut - mMidAll * aMid) / Math.max(1, aOut - aMid);
-      if (ringWhite < outerBlack + 35) return -1e9;
-      const mSurrAll = boxMean(cx - rOut * 1.4, cy - rOut * 1.4, cx + rOut * 1.4, cy + rOut * 1.4);
-      const aSurr = (2 * rOut * 1.4) * (2 * rOut * 1.4);
-      const surrWhite = (mSurrAll * aSurr - mOutAll * aOut) / Math.max(1, aSurr - aOut);
-      if (surrWhite < outerBlack + 30) return -1e9;
+      const maxMIn = relaxed ? 182 : 135;
+      const minRingDiff = relaxed ? 22 : 42;
+      const minOuterDiff = relaxed ? 18 : 35;
+      const minSurrDiff = relaxed ? 16 : 30;
+      const minArmIn = relaxed ? 16 : 30;
+      const minArmOut = relaxed ? 10 : 18;
+      const minScore = relaxed ? 92 : 165;
 
-      // Directional symmetry gate: reject bubble clusters inside grid where contrast only exists on 1-2 sides
-      const rw = (rIn + rMid) * 0.5;
-      const ro = (rMid + rOut) * 0.5;
-      const rBand = Math.max(1, (rMid - rIn) * 0.45);
-      const ringArms = [
-        boxMean(cx - rBand, cy - rw - rBand, cx + rBand, cy - rw + rBand),
-        boxMean(cx - rBand, cy + rw - rBand, cx + rBand, cy + rw + rBand),
-        boxMean(cx - rw - rBand, cy - rBand, cx - rw + rBand, cy + rBand),
-        boxMean(cx + rw - rBand, cy - rBand, cx + rw + rBand, cy + rBand)
-      ];
-      if (Math.min(...ringArms) < mIn + 30) return -1e9;
-      const outerArms = [
-        boxMean(cx - rBand, cy - ro - rBand, cx + rBand, cy - ro + rBand),
-        boxMean(cx - rBand, cy + ro - rBand, cx + rBand, cy + ro + rBand),
-        boxMean(cx - ro - rBand, cy - rBand, cx - ro + rBand, cy + rBand),
-        boxMean(cx + ro - rBand, cy - rBand, cx + ro + rBand, cy + rBand)
-      ];
-      if (Math.max(...outerArms) > Math.min(...ringArms) - 18) return -1e9;
+      function scoreBullseye(cx, cy, rOut, rMid, rIn) {
+        const mIn = boxMean(cx - rIn, cy - rIn, cx + rIn, cy + rIn);
+        if (mIn > maxMIn) return -1e9;
+        const mMidAll = boxMean(cx - rMid, cy - rMid, cx + rMid, cy + rMid);
+        const aIn = (2 * rIn) * (2 * rIn);
+        const aMid = (2 * rMid) * (2 * rMid);
+        const ringWhite = (mMidAll * aMid - mIn * aIn) / Math.max(1, aMid - aIn);
+        if (ringWhite < mIn + minRingDiff) return -1e9;
+        const mOutAll = boxMean(cx - rOut, cy - rOut, cx + rOut, cy + rOut);
+        const aOut = (2 * rOut) * (2 * rOut);
+        const outerBlack = (mOutAll * aOut - mMidAll * aMid) / Math.max(1, aOut - aMid);
+        if (ringWhite < outerBlack + minOuterDiff) return -1e9;
+        const mSurrAll = boxMean(cx - rOut * 1.4, cy - rOut * 1.4, cx + rOut * 1.4, cy + rOut * 1.4);
+        const aSurr = (2 * rOut * 1.4) * (2 * rOut * 1.4);
+        const surrWhite = (mSurrAll * aSurr - mOutAll * aOut) / Math.max(1, aSurr - aOut);
+        if (surrWhite < outerBlack + minSurrDiff) return -1e9;
 
-      return (ringWhite - mIn) * 0.9 + (ringWhite - outerBlack) * 1.1 + (surrWhite - outerBlack) * 0.8;
-    }
+        const rw = (rIn + rMid) * 0.5;
+        const ro = (rMid + rOut) * 0.5;
+        const rBand = Math.max(1, (rMid - rIn) * 0.45);
+        const ringArms = [
+          boxMean(cx - rBand, cy - rw - rBand, cx + rBand, cy - rw + rBand),
+          boxMean(cx - rBand, cy + rw - rBand, cx + rBand, cy + rw + rBand),
+          boxMean(cx - rw - rBand, cy - rBand, cx - rw + rBand, cy + rBand),
+          boxMean(cx + rw - rBand, cy - rBand, cx + rw + rBand, cy + rBand)
+        ];
+        if (Math.min(...ringArms) < mIn + minArmIn) return -1e9;
+        const outerArms = [
+          boxMean(cx - rBand, cy - ro - rBand, cx + rBand, cy - ro + rBand),
+          boxMean(cx - rBand, cy + ro - rBand, cx + rBand, cy + ro + rBand),
+          boxMean(cx - ro - rBand, cy - rBand, cx - ro + rBand, cy + rBand),
+          boxMean(cx + ro - rBand, cy - rBand, cx + ro + rBand, cy + rBand)
+        ];
+        if (Math.max(...outerArms) > Math.min(...ringArms) - minArmOut) return -1e9;
+        return (ringWhite - mIn) * 0.9 + (ringWhite - outerBlack) * 1.1 + (surrWhite - outerBlack) * 0.8;
+      }
 
-    function searchQuadrant(qx0, qy0, qx1, qy1) {
-      let bestScore = -1e9;
-      let bestRaw = { cx: (qx0 + qx1) * 0.5, cy: (qy0 + qy1) * 0.5, rOut: 6, rIn: 2, score: 0 };
-      const rCandidates = [
-        Math.max(4, Math.round(dw * 0.011)),
-        Math.max(5, Math.round(dw * 0.015)),
-        Math.max(7, Math.round(dw * 0.020)),
-        Math.max(9, Math.round(dw * 0.026))
-      ];
-      for (const rOut of rCandidates) {
-        const rMid = Math.max(2, Math.round(rOut * 0.62));
-        const rIn = Math.max(1, Math.round(rOut * 0.31));
-        for (let cy = Math.max(rOut + 2, qy0); cy < Math.min(dh - rOut - 2, qy1); cy += 2) {
-          for (let cx = Math.max(rOut + 2, qx0); cx < Math.min(dw - rOut - 2, qx1); cx += 2) {
-            const sc = scoreBullseye(cx, cy, rOut, rMid, rIn);
-            if (sc > bestScore) {
-              bestScore = sc;
-              bestRaw = { cx, cy, rOut, rIn, score: sc };
+      function searchQuadrant(qx0, qy0, qx1, qy1) {
+        let bestScore = -1e9;
+        let bestRaw = { cx: (qx0 + qx1) * 0.5, cy: (qy0 + qy1) * 0.5, rOut: 6, rIn: 2, score: 0 };
+        const rCandidates = [
+          Math.max(4, Math.round(dw * 0.011)),
+          Math.max(5, Math.round(dw * 0.015)),
+          Math.max(7, Math.round(dw * 0.020)),
+          Math.max(9, Math.round(dw * 0.026))
+        ];
+        for (const rOut of rCandidates) {
+          const rMid = Math.max(2, Math.round(rOut * 0.62));
+          const rIn = Math.max(1, Math.round(rOut * 0.31));
+          for (let cy = Math.max(rOut + 2, qy0); cy < Math.min(dh - rOut - 2, qy1); cy += 2) {
+            for (let cx = Math.max(rOut + 2, qx0); cx < Math.min(dw - rOut - 2, qx1); cx += 2) {
+              const sc = scoreBullseye(cx, cy, rOut, rMid, rIn);
+              if (sc > bestScore) { bestScore = sc; bestRaw = { cx, cy, rOut, rIn, score: sc }; }
             }
           }
         }
-      }
-      if (bestScore <= 0) {
-        return { x: bestRaw.cx / scale, y: bestRaw.cy / scale, score: 0 };
-      }
-      // Sub-pixel core refinement within +-2 px around coarse peak
-      let refX = bestRaw.cx, refY = bestRaw.cy, refSc = bestScore;
-      const rMidRef = Math.max(2, Math.round(bestRaw.rOut * 0.62));
-      for (let dy = -2; dy <= 2; dy++) {
-        for (let dx = -2; dx <= 2; dx++) {
-          const sc = scoreBullseye(bestRaw.cx + dx, bestRaw.cy + dy, bestRaw.rOut, rMidRef, bestRaw.rIn);
-          if (sc > refSc) { refSc = sc; refX = bestRaw.cx + dx; refY = bestRaw.cy + dy; }
+        if (bestScore <= 0) return { x: bestRaw.cx / scale, y: bestRaw.cy / scale, r: 0, score: 0 };
+        let refX = bestRaw.cx, refY = bestRaw.cy, refSc = bestScore;
+        const rMidRef = Math.max(2, Math.round(bestRaw.rOut * 0.62));
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            const sc = scoreBullseye(bestRaw.cx + dx, bestRaw.cy + dy, bestRaw.rOut, rMidRef, bestRaw.rIn);
+            if (sc > refSc) { refSc = sc; refX = bestRaw.cx + dx; refY = bestRaw.cy + dy; }
+          }
         }
-      }
-      let wSum = 0, xSum = 0, ySum = 0;
-      const cRad = Math.max(2, bestRaw.rIn + 1);
-      for (let yy = Math.max(0, refY - cRad); yy <= Math.min(dh - 1, refY + cRad); yy++) {
-        for (let xx = Math.max(0, refX - cRad); xx <= Math.min(dw - 1, refX + cRad); xx++) {
-          const dark = Math.max(0, 175 - gray[yy * dw + xx]);
-          wSum += dark; xSum += xx * dark; ySum += yy * dark;
+        let wSum = 0, xSum = 0, ySum = 0;
+        const cRad = Math.max(2, bestRaw.rIn + 1);
+        const darkRef = relaxed ? 210 : 175;
+        for (let yy = Math.max(0, refY - cRad); yy <= Math.min(dh - 1, refY + cRad); yy++) {
+          for (let xx = Math.max(0, refX - cRad); xx <= Math.min(dw - 1, refX + cRad); xx++) {
+            const dark = Math.max(0, darkRef - field[yy * dw + xx]);
+            wSum += dark; xSum += xx * dark; ySum += yy * dark;
+          }
         }
+        const finX = wSum > 10 ? xSum / wSum : refX;
+        const finY = wSum > 10 ? ySum / wSum : refY;
+        return { x: finX / scale, y: finY / scale, r: bestRaw.rOut / scale, score: refSc };
       }
-      const finX = wSum > 10 ? xSum / wSum : refX;
-      const finY = wSum > 10 ? ySum / wSum : refY;
-      return { x: finX / scale, y: finY / scale, r: bestRaw.rOut / scale, score: refSc };
-    }
 
-    // Check Mode A (Web A4 Bullseyes)
-    const bTL = searchQuadrant(0, 0, Math.round(dw * 0.45), Math.round(dh * 0.46));
-    const bTR = searchQuadrant(Math.round(dw * 0.55), 0, dw, Math.round(dh * 0.46));
-    const minBotY = Math.round(Math.max(dh * 0.36, Math.max(bTL.y, bTR.y) * scale + dh * 0.16));
-    const bBL = searchQuadrant(0, minBotY, Math.round(dw * 0.45), dh);
-    const bBR = searchQuadrant(Math.round(dw * 0.55), minBotY, dw, dh);
+      const bTL = searchQuadrant(0, 0, Math.round(dw * 0.45), Math.round(dh * 0.46));
+      const bTR = searchQuadrant(Math.round(dw * 0.55), 0, dw, Math.round(dh * 0.46));
+      const minBotY = Math.round(Math.max(dh * 0.36, Math.max(bTL.y, bTR.y) * scale + dh * 0.16));
+      const bBL = searchQuadrant(0, minBotY, Math.round(dw * 0.45), dh);
+      const bBR = searchQuadrant(Math.round(dw * 0.55), minBotY, dw, dh);
 
-    const minBullScore = Math.min(bTL.score, bTR.score, bBL.score, bBR.score);
-    const bullSpanX = Math.hypot(bTR.x - bTL.x, bTR.y - bTL.y);
-    const bullSpanY = Math.hypot(bBL.x - bTL.x, bBL.y - bTL.y);
-    const bullRatio = bullSpanX / Math.max(10, bullSpanY);
+      const minBullScore = Math.min(bTL.score, bTR.score, bBL.score, bBR.score);
+      const wTop = Math.hypot(bTR.x - bTL.x, bTR.y - bTL.y);
+      const wBot = Math.hypot(bBR.x - bBL.x, bBR.y - bBL.y);
+      const hLeft = Math.hypot(bBL.x - bTL.x, bBL.y - bTL.y);
+      const hRight = Math.hypot(bBR.x - bTR.x, bBR.y - bTR.y);
+      const bullRatio = wTop / Math.max(10, hLeft);
 
-    if (minBullScore >= 165 && bullRatio >= 1.0 && bullRatio <= 2.1) {
+      if (minBullScore < minScore || bullRatio < 1.0 || bullRatio > 2.1) return null;
+      if (relaxed) {
+        const rs = [bTL.r, bTR.r, bBL.r, bBR.r];
+        if (Math.max(...rs) > Math.min(...rs) * 1.75) return null;
+        if (Math.abs(wTop - wBot) / Math.max(wTop, wBot, 1) > 0.22) return null;
+        if (Math.abs(hLeft - hRight) / Math.max(hLeft, hRight, 1) > 0.22) return null;
+      }
+
       const Hweb = solveHomographyPts(
         [
           { x: -FID_PAD_ANS_X, y: -FID_PAD_ANS_Y },
@@ -17626,23 +18282,67 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         ],
         [bTL, bTR, bBL, bBR]
       );
-      if (Hweb) {
-        return {
-          mode: 'web-bullseye',
-          tl: applyHomography(Hweb, 0, 0),
-          tr: applyHomography(Hweb, ANS_W, 0),
-          bl: applyHomography(Hweb, 0, ANS_H),
-          br: applyHomography(Hweb, ANS_W, ANS_H)
-        };
+      if (!Hweb) return null;
+      return {
+        mode: 'web-bullseye',
+        tl: applyHomography(Hweb, 0, 0),
+        tr: applyHomography(Hweb, ANS_W, 0),
+        bl: applyHomography(Hweb, 0, ANS_H),
+        br: applyHomography(Hweb, ANS_W, ANS_H)
+      };
+    }
+
+    const webRaw = detectBullseyesOnField(gray, false);
+    if (webRaw) return webRaw;
+
+    const normGray = buildNormalizedGray(gray, dw, dh);
+    const webNorm = detectBullseyesOnField(normGray, true);
+    if (webNorm) return webNorm;
+
+    const evalBestFp = (cand, refField) => {
+      if (!cand) return { total: -1e9, posTrans: 0, gutPos: 0, hdrMin: -1, outMin: -1 };
+      const f1 = scoreCandidateOnRawGray(normGray, dw, dh, cand, scale, 2);
+      const f2 = scoreCandidateOnRawGray(gray, dw, dh, cand, scale, 2);
+      let best = f1.total >= f2.total ? f1 : f2;
+      if (refField) {
+        const f3 = scoreCandidateOnRawGray(refField, dw, dh, cand, scale, 2);
+        if (f3.total > best.total) best = f3;
+      }
+      return best;
+    };
+
+    // Mode B1: Primary Non-Bleaching QuadNorm ETS Detector
+    let bestEts = detectOfficialEtsGridCorners(normGray, gray, dw, dh, scale);
+    let bestFp = evalBestFp(bestEts, null);
+    const isStrong = (fp) => fp && fp.posTrans >= 8 && fp.gutPos >= 9 && fp.hdrMin >= 0.025 && fp.outMin >= 0.020;
+
+    if (!isStrong(bestFp)) {
+      // Mode B2: Local Shadow-Norm ETS Detector (flattens circular flash hotspots, dark vignettes & shadow bands!)
+      const localNorm = buildLocalShadowNormGray(gray, dw, dh, 0.048);
+      if (bestEts) bestFp = evalBestFp(bestEts, localNorm);
+      const etsLoc = detectOfficialEtsGridCorners(localNorm, gray, dw, dh, scale);
+      if (etsLoc) {
+        const fpLoc = evalBestFp(etsLoc, localNorm);
+        if (fpLoc.total > bestFp.total + 8) {
+          bestEts = etsLoc;
+          bestFp = fpLoc;
+        }
+      }
+      // Mode B3: Tight-Aperture Multiplicative-Shadow-Invariant Step-Diff Detector (cuts through sharp diagonal shadows!)
+      if (!isStrong(bestFp)) {
+        const etsStep = detectOfficialEtsByShadowInvariantStep(gray, localNorm, dw, dh, scale);
+        if (etsStep) {
+          const fpStep = evalBestFp(etsStep, localNorm);
+          if (fpStep.total > bestFp.total + 8) {
+            bestEts = etsStep;
+            bestFp = fpStep;
+          }
+        }
       }
     }
 
-    // Mode B (Official ETS PDF Grid Frame — ignores Sections 10-13)
-    const normGray = buildNormalizedGray(gray, dw, dh);
-    const etsCorners = detectOfficialEtsGridCorners(normGray, dw, dh, scale);
-    if (etsCorners) return etsCorners;
+    if (bestEts && bestFp.total > 200) return bestEts;
 
-    // Fallback default rectangle in upper-middle region for easy manual drag adjustment
     return {
       mode: 'manual-fallback',
       tl: { x: w * 0.16, y: h * 0.13 },
@@ -17687,6 +18387,130 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   const OFF_WHITE_ANN = makeCircleOffsets(4.6, 7.2);
   const OFF_FULL_DISK = makeCircleOffsets(0.0, 6.8);
   const OFF_BLACK_RING = makeCircleOffsets(7.8, 9.6);
+  const OFF_RING_Q = [
+    OFF_BLACK_RING.filter((p) => p.dx >= 0 && Math.abs(p.dx) >= Math.abs(p.dy)),
+    OFF_BLACK_RING.filter((p) => p.dx < 0 && Math.abs(p.dx) >= Math.abs(p.dy)),
+    OFF_BLACK_RING.filter((p) => p.dy >= 0 && Math.abs(p.dy) > Math.abs(p.dx)),
+    OFF_BLACK_RING.filter((p) => p.dy < 0 && Math.abs(p.dy) > Math.abs(p.dx))
+  ];
+  const OFF_BG_DIAMOND = (() => {
+    const pts = [];
+    const rMin2 = 11.2 * 11.2, rMax2 = 14.8 * 14.8;
+    for (let dy = -13; dy <= 13; dy++) {
+      for (let dx = -13; dx <= 13; dx++) {
+        const d2 = dx * dx + dy * dy;
+        if (Math.abs(dx) >= 4 && Math.abs(dy) >= 4 && d2 >= rMin2 && d2 <= rMax2) {
+          pts.push({ dx, dy });
+        }
+      }
+    }
+    return pts;
+  })();
+
+  function isSafeRayPt(dx, dy, sx, sy) {
+    if (Math.abs(dx) > 13 || Math.abs(dy) > 13) return false;
+    const dh = Math.hypot(dx - 23.4 * sx, dy);
+    const dv = Math.hypot(dx, dy - 23.4 * sy);
+    const dd = Math.hypot(dx - 23.4 * sx, dy - 23.4 * sy);
+    return dh >= 12.2 && dv >= 12.1 && dd >= 12.8;
+  }
+
+  const RAY_ANGLES_DEG = [30, 38, 45, 52, 60, 68];
+  const RAY_RADII = [10.6, 11.8, 13.0, 14.2];
+
+  function buildRayBank(sx, sy) {
+    const rays = [];
+    for (let a = 0; a < RAY_ANGLES_DEG.length; a++) {
+      const rad = (RAY_ANGLES_DEG[a] * Math.PI) / 180;
+      const ux = sx * Math.cos(rad);
+      const uy = sy * Math.sin(rad);
+      const px = -uy;
+      const py = ux;
+      const stations = [];
+      for (let rIdx = 0; rIdx < RAY_RADII.length; rIdx++) {
+        const r = RAY_RADII[rIdx];
+        const cx = ux * r, cy = uy * r;
+        if (!isSafeRayPt(cx, cy, sx, sy)) continue;
+        const pts = [];
+        for (let t = -1; t <= 1; t++) {
+          const dx = Math.round(cx + px * t);
+          const dy = Math.round(cy + py * t);
+          if (isSafeRayPt(dx, dy, sx, sy)) pts.push({ dx, dy });
+        }
+        if (pts.length) stations.push(pts);
+      }
+      if (stations.length >= 3) rays.push(stations);
+    }
+    return rays;
+  }
+
+  const RAYS_NE = buildRayBank(1, -1);
+  const RAYS_SW = buildRayBank(-1, 1);
+  const RAYS_NW = buildRayBank(-1, -1);
+  const RAYS_SE = buildRayBank(1, 1);
+
+  function evalQuadRay(gray, ix, iy, rays, rowRef) {
+    let bestRay = 0;
+    const invRef = 1 / rowRef;
+    for (let r = 0; r < rays.length; r++) {
+      const stations = rays[r];
+      const drops = [];
+      for (let s = 0; s < stations.length; s++) {
+        const pts = stations[s];
+        let vmin = 255;
+        let valid = false;
+        for (let p = 0; p < pts.length; p++) {
+          const xx = ix + pts[p].dx;
+          const yy = iy + pts[p].dy;
+          if (xx >= 0 && xx < SHEET_W && yy >= 0 && yy < SHEET_H) {
+            const val = gray[yy * SHEET_W + xx];
+            if (val < vmin) vmin = val;
+            valid = true;
+          }
+        }
+        if (valid) {
+          const d = (rowRef - vmin) * invRef;
+          drops.push(d > 0 ? d : 0);
+        }
+      }
+      if (drops.length >= 3) {
+        drops.sort((a, b) => a - b);
+        const cont = 0.55 * drops[0] + 0.45 * drops[1];
+        if (cont > bestRay) bestRay = cont;
+      }
+    }
+    return bestRay;
+  }
+
+  // Embedded OMR_MLP v8.0 (16 -> 24 ReLU -> 12 ReLU -> 1 Sigmoid, 721 params)
+  // Trained on 206,232 real (11 ETS sheets + 7 external OMR datasets) + photocopy/cross-out/glossy augmented bubbles (99.77% strict 10-group LOSO CV)
+  const OMR_MLP_V8 = {
+    W1: [[-0.07976,-0.0,-0.0142,-0.0583,0.05816,0.01692,-0.00308,0.07804,0.01155,0.04891,-0.03951,-0.19201,0.00253,0.18909,0.0,0.01399,-0.21455,-0.00391,-0.05856,0.12738,-0.13599,-0.07809,-0.04776,0.0],[-0.02939,-0.0,-0.01146,-0.02445,0.04168,-0.03004,-0.00031,0.08654,-0.00634,0.02526,-0.00239,-0.25559,0.00039,0.15239,-0.0,0.01526,-0.28686,0.00014,-0.02108,0.05,-0.04968,-0.00564,-0.02263,0.0],[0.02178,-0.0,0.01036,0.04375,-0.05525,0.01036,-0.00658,0.08263,0.01187,-0.00216,0.02283,-0.15938,-0.00409,0.14226,-0.0,-0.01976,-0.17797,-0.00868,0.01716,0.16033,-0.39829,0.01318,0.00654,-0.0],[0.0273,0.0,0.04687,0.02314,-0.09274,-0.01505,-0.00599,0.07626,0.00238,-0.01331,0.04142,-0.18368,-0.00678,0.13655,0.0,-0.02816,-0.20653,-0.00849,0.02834,0.20658,-0.39846,0.03574,0.03361,0.0],[0.10284,-0.0,0.14488,0.11882,0.18166,-0.1969,0.0135,-0.17287,-0.07772,0.02855,0.07091,-0.23105,0.0084,-0.44498,0.0,0.09715,-0.25647,0.02327,0.08472,-0.68827,0.9512,0.18411,0.06087,0.0],[0.13722,0.0,0.17558,0.191,-0.05878,-0.06827,0.00082,0.01359,-0.0579,-0.03026,0.16537,-0.18945,-0.00607,0.26719,-0.0,-0.00178,-0.20651,-0.0002,0.12878,0.10532,0.22781,0.09834,0.10958,-0.0],[-0.06686,0.0,-0.05433,-0.06761,0.07831,0.03956,0.00235,0.05559,0.01604,0.03328,-0.04776,0.00834,0.00595,0.12905,0.0,0.02627,0.01105,0.00128,-0.04333,0.1505,0.07966,-0.06249,-0.03877,-0.0],[-0.07079,-0.0,-0.05906,-0.07152,0.06744,0.03835,0.00156,0.05615,0.01806,0.03502,-0.05172,0.01059,0.00685,0.12475,-0.0,0.02177,0.01332,0.00139,-0.04748,0.13183,0.04416,-0.0685,-0.04322,-0.0],[0.04663,0.0,0.04078,0.02166,0.03287,-0.03703,-0.00066,0.05741,-0.01152,0.01558,0.03081,-0.20044,0.00012,0.06503,-0.0,0.01289,-0.22442,0.00056,-0.00845,0.04108,0.03643,0.03781,0.00725,0.0],[-0.33106,-0.0,-0.20356,-0.27237,0.31694,0.17389,0.01316,0.233,0.06729,0.13095,-0.17701,-0.08336,0.03191,0.38921,-0.00039,0.09559,-0.08668,0.00404,-0.1804,0.59842,0.31775,-0.2599,-0.19173,-0.0017],[-0.29307,-0.0,-0.21539,-0.29614,0.34302,0.15772,0.00779,0.31109,0.05041,0.15103,-0.22437,-0.14465,0.02352,0.5535,0.0,0.09695,-0.15538,0.00992,-0.20963,0.56881,0.28804,-0.30733,-0.18225,1e-05],[0.05491,-0.0,0.05643,-0.02964,0.06626,0.1119,0.00162,0.02606,0.0329,0.25261,-0.14372,-0.37076,0.02123,0.10943,-0.0,0.04739,-0.41656,0.00199,-0.00365,0.14942,0.07217,-0.10674,0.00181,0.0],[-0.19849,-0.0,-0.37169,-0.25559,0.28392,-0.01863,0.02324,0.07689,0.00432,0.13814,-0.16363,-0.09709,0.02737,-0.07627,-2e-05,0.09028,-0.10054,0.04907,-0.14669,-0.26257,0.89145,-0.22017,-0.13997,0.0007],[-0.0826,-0.0,-0.06564,-0.08392,-0.02427,0.05012,-0.00568,0.04822,0.0364,0.04311,-0.06192,-0.16277,0.00706,0.02094,-0.0,-0.00869,-0.18401,-0.0082,-0.05843,0.10495,-0.33249,-0.07248,-0.05201,-0.0],[0.04075,-0.0,0.03499,0.04096,-0.13274,0.01134,-0.00946,-0.05275,0.02016,-0.01415,0.03046,-0.15348,-0.00306,-0.19242,-0.0,-0.04248,-0.17382,-0.01208,0.02547,-0.12291,-0.54305,0.048,0.02273,-0.0],[0.38929,-0.0,0.35096,0.38551,-0.44577,0.08596,-0.0111,-0.22404,0.04042,-0.05865,0.27026,-0.06157,0.00872,-0.60923,0.0,-0.12258,-0.06823,-0.01752,0.25988,-0.46423,-1.0882,0.43078,0.2362,0.0]],
+    b1: [0.34029,-0.04157,0.4115,0.3665,0.07499,-0.03868,-0.00076,0.14521,-0.01135,0.43301,0.30912,0.69027,0.26142,0.06881,-0.15046,-0.0083,0.76805,-0.00483,0.33552,-0.00745,-0.06265,0.31829,0.36176,-0.13672],
+    W2: [[0.33228,-0.1655,0.11199,0.20796,0.14991,-0.0,-0.20678,0.16989,-0.0,0.40696,0.00123,-0.0],[-0.0,0.0,0.0,0.0,-0.0,-0.0,-0.0,-0.0,-0.0,0.00022,0.0,-0.0],[0.33027,-0.04114,0.11689,0.19749,0.21759,-0.00013,-0.10655,0.16737,-0.00054,0.41701,-0.00135,0.0089],[0.34786,-0.17604,0.12124,0.1813,0.27007,0.0,-0.21707,0.16036,0.0,0.3097,-0.00386,-0.0],[-0.27963,0.34213,-0.11149,-0.16804,-0.15799,-0.0,0.45553,-0.15344,0.0,-0.20636,0.0,0.0],[-0.14546,0.14195,-0.06008,-0.07994,-0.07447,0.0,0.20059,-0.07005,0.0,-0.12211,0.0,-0.0],[-0.00491,0.0487,-0.00315,-0.00257,-0.00245,-0.0,0.01155,-0.00297,-0.0,-0.00257,-0.0,-0.00183],[-0.09922,0.2812,-0.05713,-0.07464,-0.0882,-0.0,0.37604,-0.08229,-0.0,-0.12943,0.0,-0.01333],[-0.05303,0.06095,-0.02188,-0.02956,-0.04507,-0.00274,0.07462,-0.02573,0.00814,-0.07877,0.0,-0.02046],[0.00809,0.38863,0.00681,0.03509,0.03738,0.00232,0.33104,0.01099,-0.00281,0.1621,-0.0,-0.02159],[0.2563,-0.13735,0.08214,0.14322,0.129,0.0,-0.17371,0.11726,-0.0,0.1934,0.0,0.0],[0.37204,-0.21631,0.12153,0.20649,0.18984,-0.0,-0.29462,0.17308,0.0,0.26447,0.0,0.0],[0.04553,0.13427,0.00788,0.02339,0.02001,0.00013,0.0722,0.01289,-0.00031,0.05062,-0.0,0.02178],[-0.44447,0.40137,-0.15171,-0.27362,-0.25271,0.0001,0.63358,-0.24837,-4e-05,-0.41539,-0.0,-0.00238],[0.0,0.0,-0.0,0.0,-0.0,-0.0,-0.0,0.0,-0.0,-9e-05,-0.0,-0.0],[-0.07632,0.11216,-0.03187,-0.04543,-0.04248,-0.0,0.14261,-0.04223,0.0,-0.05534,-0.0,-0.0],[0.41695,-0.2444,0.13646,0.23161,0.21298,-0.0,-0.33258,0.19419,-0.0,0.29658,0.0,-0.0],[-0.00918,0.04926,-0.00634,-0.00633,-0.00592,-0.0,0.02506,-0.00618,-0.0,-0.00436,-0.0,-0.0002],[0.25502,-0.10017,0.07931,0.14369,0.13483,0.0,-0.12142,0.11439,0.0,0.22322,0.0,0.0],[-0.56844,0.49051,-0.18424,-0.32632,-0.30715,-0.0,0.68917,-0.28892,0.0,-0.40675,-0.0,3e-05],[-0.78475,0.82531,-0.29686,-0.4477,-0.4185,-0.0,1.16025,-0.38696,0.0,-0.58913,0.0,-0.0],[0.34553,-0.19093,0.10986,0.19393,0.18422,-0.0,-0.24815,0.16158,-0.0,0.28754,-0.0,0.0],[0.22835,-0.0836,0.07483,0.14589,0.14947,-0.0,-0.09703,0.11022,-1e-05,0.19999,-0.00035,-0.00586],[0.0,0.01559,0.0,0.0,0.0,-0.0,-9e-05,0.0,-0.0,0.0,-0.0,-0.00022]],
+    b2: [0.73283,0.44924,0.43978,0.41143,0.36827,-0.14854,0.57644,0.42831,-0.13354,0.36635,-0.1804,-0.19457],
+    W3: [-1.47763,1.15426,-0.49295,-0.82853,-0.76248,-0.00021,1.65057,-0.69742,-0.00446,-1.05503,-0.00292,-0.07714],
+    b3: -0.19553
+  };
+
+  function evalOmrMlpV8(feat16) {
+    const h1 = new Float64Array(24);
+    for (let j = 0; j < 24; j++) {
+      let z1 = OMR_MLP_V8.b1[j];
+      for (let i = 0; i < 16; i++) z1 += feat16[i] * OMR_MLP_V8.W1[i][j];
+      h1[j] = z1 > 0 ? z1 : 0;
+    }
+    let z3 = OMR_MLP_V8.b3;
+    for (let k = 0; k < 12; k++) {
+      let z2 = OMR_MLP_V8.b2[k];
+      for (let j = 0; j < 24; j++) {
+        if (h1[j] > 0) z2 += h1[j] * OMR_MLP_V8.W2[j][k];
+      }
+      if (z2 > 0) z3 += z2 * OMR_MLP_V8.W3[k];
+    }
+    const clamped = Math.max(-20, Math.min(20, z3));
+    return 1 / (1 + Math.exp(-clamped));
+  }
 
   function medianOfSortedBuf(buf, len) {
     if (len <= 0) return 255;
@@ -17696,18 +18520,26 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     return (len & 1) ? sub[mid] : 0.5 * (sub[mid - 1] + sub[mid]);
   }
 
-  function fitSideVerticalBands(prof, pref, isListen, EH, PAD_Y) {
+  function pctOfSortedBuf(buf, len, q) {
+    if (len <= 0) return 255;
+    const sub = buf.subarray(0, len);
+    sub.sort();
+    return sub[Math.min(len - 1, Math.floor(len * q))];
+  }
+
+  function fitSideVerticalBands(prof, pref, isListen, EH, PAD_Y, tightMode) {
     const meanRange = (a, b) => {
       const i0 = Math.max(0, Math.min(EH - 1, a | 0));
       const i1 = Math.max(i0 + 1, Math.min(EH, b | 0));
       return (pref[i1] - pref[i0]) / (i1 - i0);
     };
 
+    const syMin = tightMode ? 0.90 : 0.80;
+    const syMax = tightMode ? 1.10 : 1.20;
+    const oyLim = tightMode ? 30 : 52;
     let bestSy = 1.0, bestOy = 0.0, bestSc = -1e9;
-    for (let si = 0; si <= 80; si++) {
-      const syTry = 0.80 + si * 0.005;
-      for (let oi = 0; oi <= 104; oi++) {
-        const oyTry = -52.0 + oi * 1.0;
+    for (let syTry = syMin; syTry <= syMax + 1e-6; syTry += 0.005) {
+      for (let oyTry = -oyLim; oyTry <= oyLim; oyTry += 1.0) {
         const yb0 = PAD_Y + oyTry + syTry * CANON_BAND_Y[0];
         const yb5 = PAD_Y + oyTry + syTry * CANON_BAND_Y[5];
         if (yb0 < 15 || yb5 > EH - 15) continue;
@@ -17721,7 +18553,12 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         const b5 = Math.round(yb5);
 
         const aboveTop = meanRange(yTopEst - 12, yTopEst - 2);
-        const hdr = meanRange(yTopEst + 4, b0 - 3);
+        // Split header into upper & lower halves and take the brighter half:
+        // True solid gray header is gray in BOTH halves; locking onto the 6 top black timing dots leaves a bright white gap in between!
+        const hdrMidY = Math.round(0.5 * (yTopEst + b0));
+        const hdrUpper = meanRange(yTopEst + 4, Math.max(yTopEst + 7, hdrMidY - 2));
+        const hdrLower = meanRange(Math.min(b0 - 6, hdrMidY + 2), b0 - 3);
+        const hdr = Math.max(hdrUpper, hdrLower);
         const m0 = meanRange(b0 + 4, b1 - 4);
         const m1 = meanRange(b1 + 4, b2 - 4);
         const m2 = meanRange(b2 + 4, b3 - 4);
@@ -17822,7 +18659,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     return { yT: bestYtop, yb: refinedYb };
   }
 
-  function singlePassSnap(srcPixels, sw, sh, initCorners, searchRadX, buildWarpedImage) {
+  function singlePassSnap(srcPixels, sw, sh, initCorners, searchRadX, buildWarpedImage, normRadOverride) {
     const LISTEN_X1 = ((307.56 - PDF_BOX.x0) / PDF_BOX.w) * ANS_W;
     const READ_X0 = ((315.12 - PDF_BOX.x0) / PDF_BOX.w) * ANS_W;
     const H0 = solveHomographyPts(
@@ -17831,11 +18668,12 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     );
     if (!H0) return null;
 
-    const PAD_X = 72, PAD_Y = 72;
+    const PAD_X = searchRadX >= 40 ? 112 : 72, PAD_Y = 72;
     const EW = ANS_W + 2 * PAD_X;
     const EH = ANS_H + 2 * PAD_Y;
     const expRgb = buildWarpedImage ? new Float32Array(EW * EH * 3) : null;
     const expLum = new Float32Array(EW * EH);
+    const expOob = new Uint8Array(EW * EH);
 
     for (let yy = 0; yy < EH; yy++) {
       const cy = yy - PAD_Y;
@@ -17845,10 +18683,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         const den = H0[6] * cx + H0[7] * cy + 1.0;
         const sx = (H0[0] * cx + H0[1] * cy + H0[2]) / den;
         const sy = (H0[3] * cx + H0[4] * cy + H0[5]) / den;
+        const isOob = (sx < 0 || sx > sw - 1.001 || sy < 0 || sy > sh - 1.001);
         const x0 = Math.max(0, Math.min(sw - 2, Math.floor(sx)));
         const y0 = Math.max(0, Math.min(sh - 2, Math.floor(sy)));
-        const fx = sx - x0;
-        const fy = sy - y0;
+        const fx = Math.max(0, Math.min(1, sx - x0));
+        const fy = Math.max(0, Math.min(1, sy - y0));
         const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
         const i00 = (y0 * sw + x0) * 4;
         const i10 = i00 + 4;
@@ -17865,7 +18704,40 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           expRgb[idx3 + 2] = b;
         }
         expLum[idx] = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (isOob) expOob[idx] = 1;
       }
+    }
+
+    // Illumination-normalize expLum for geometric snapping (raw expRgb stays 100% untouched for OMR grading!):
+    let expNorm;
+    let hasShadowResid = false;
+    if (normRadOverride && normRadOverride > 0) {
+      expNorm = buildLocalShadowNormGray(expLum, EW, EH, normRadOverride);
+    } else {
+      expNorm = buildNormalizedGray(expLum, EW, EH);
+      const cellMax = [];
+      for (let gy = 0; gy < 6; gy++) {
+        for (let gx = 0; gx < 6; gx++) {
+          const cx = Math.floor(PAD_X + ((gx + 0.5) / 6) * ANS_W);
+          const cy = Math.floor(PAD_Y + ((gy + 0.5) / 6) * ANS_H);
+          let mx = 0;
+          for (let dy = -16; dy <= 16; dy += 4) {
+            for (let dx = -16; dx <= 16; dx += 4) {
+              const idxC = (cy + dy) * EW + (cx + dx);
+              if (!expOob[idxC] && expNorm[idxC] > mx) mx = expNorm[idxC];
+            }
+          }
+          if (mx > 0) cellMax.push(mx);
+        }
+      }
+      cellMax.sort((a, b) => a - b);
+      if (cellMax.length && cellMax[Math.floor(cellMax.length * 0.12)] < 216) {
+        hasShadowResid = true;
+      }
+    }
+    // Treat out-of-image clamped border pixels as clean paper white in expNorm so ultra-tight frames (KQT4BAO) never get penalized!
+    for (let i = 0; i < expNorm.length; i++) {
+      if (expOob[i]) expNorm[i] = 250;
     }
 
     const L_prof = new Float32Array(EH);
@@ -17885,23 +18757,23 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     for (let y = 0; y < EH; y++) {
       const rowOff = y * EW;
       let nL = 0;
-      for (let x = PAD_X + 70; x < PAD_X + 440; x += 2) tmpBuf[nL++] = expLum[rowOff + x];
+      for (let x = PAD_X + 70; x < PAD_X + 440; x += 2) tmpBuf[nL++] = expNorm[rowOff + x];
       const medL = medianOfSortedBuf(tmpBuf, nL);
       let nR = 0;
-      for (let x = PAD_X + 560; x < PAD_X + 930; x += 2) tmpBuf[nR++] = expLum[rowOff + x];
+      for (let x = PAD_X + 560; x < PAD_X + 930; x += 2) tmpBuf[nR++] = expNorm[rowOff + x];
       const medR = medianOfSortedBuf(tmpBuf, nR);
 
       let n0 = 0;
-      for (let x = PAD_X + 45; x < PAD_X + 240; x += 2) tmpBuf[n0++] = expLum[rowOff + x];
+      for (let x = PAD_X + 45; x < PAD_X + 240; x += 2) tmpBuf[n0++] = expNorm[rowOff + x];
       const med0 = 0.65 * medianOfSortedBuf(tmpBuf, n0) + 0.35 * medL;
       let n1 = 0;
-      for (let x = PAD_X + 265; x < PAD_X + 460; x += 2) tmpBuf[n1++] = expLum[rowOff + x];
+      for (let x = PAD_X + 265; x < PAD_X + 460; x += 2) tmpBuf[n1++] = expNorm[rowOff + x];
       const med1 = 0.65 * medianOfSortedBuf(tmpBuf, n1) + 0.35 * medL;
       let n2 = 0;
-      for (let x = PAD_X + 540; x < PAD_X + 735; x += 2) tmpBuf[n2++] = expLum[rowOff + x];
+      for (let x = PAD_X + 540; x < PAD_X + 735; x += 2) tmpBuf[n2++] = expNorm[rowOff + x];
       const med2 = 0.65 * medianOfSortedBuf(tmpBuf, n2) + 0.35 * medR;
       let n3 = 0;
-      for (let x = PAD_X + 765; x < PAD_X + 960; x += 2) tmpBuf[n3++] = expLum[rowOff + x];
+      for (let x = PAD_X + 765; x < PAD_X + 960; x += 2) tmpBuf[n3++] = expNorm[rowOff + x];
       const med3 = 0.65 * medianOfSortedBuf(tmpBuf, n3) + 0.35 * medR;
 
       L_prof[y] = medL; R_prof[y] = medR;
@@ -17914,12 +18786,13 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       prefS3[y + 1] = prefS3[y] + med3;
     }
 
-    const fitL = fitSideVerticalBands(L_prof, prefL, true, EH, PAD_Y);
-    const fitR = fitSideVerticalBands(R_prof, prefR, false, EH, PAD_Y);
-    const fit0 = fitSideVerticalBands(S0_prof, prefS0, true, EH, PAD_Y);
-    const fit1 = fitSideVerticalBands(S1_prof, prefS1, true, EH, PAD_Y);
-    const fit2 = fitSideVerticalBands(S2_prof, prefS2, false, EH, PAD_Y);
-    const fit3 = fitSideVerticalBands(S3_prof, prefS3, false, EH, PAD_Y);
+    const tightV = searchRadX <= 42;
+    const fitL = fitSideVerticalBands(L_prof, prefL, true, EH, PAD_Y, tightV);
+    const fitR = fitSideVerticalBands(R_prof, prefR, false, EH, PAD_Y, tightV);
+    const fit0 = fitSideVerticalBands(S0_prof, prefS0, true, EH, PAD_Y, tightV);
+    const fit1 = fitSideVerticalBands(S1_prof, prefS1, true, EH, PAD_Y, tightV);
+    const fit2 = fitSideVerticalBands(S2_prof, prefS2, false, EH, PAD_Y, tightV);
+    const fit3 = fitSideVerticalBands(S3_prof, prefS3, false, EH, PAD_Y, tightV);
 
     const yT_L = fitL.yT, yb_L = fitL.yb;
     const yT_R = fitR.yT, yb_R = fitR.yb;
@@ -17945,64 +18818,142 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
     const hist = new Uint32Array(256);
     let hTotal = 0;
-    for (let i = 0; i < expLum.length; i += 4) {
-      const v = Math.max(0, Math.min(255, expLum[i] | 0));
+    for (let i = 0; i < expNorm.length; i += 4) {
+      const v = Math.max(0, Math.min(255, expNorm[i] | 0));
       hist[v]++;
       hTotal++;
     }
-    let pWhite = 220, hCum = 0;
-    const target88 = Math.floor(hTotal * 0.88);
+    let pWhite = 240, hCum = 0;
+    const target90 = Math.floor(hTotal * 0.90);
     for (let b = 0; b < 256; b++) {
       hCum += hist[b];
-      if (hCum >= target88) { pWhite = b; break; }
+      if (hCum >= target90) { pWhite = b; break; }
     }
-    const outFloor = 0.78 * pWhite;
-    const inCeil = 0.90 * pWhite;
+
+    const meanProfSeg = (arr, yA, yB) => {
+      const i0 = Math.max(0, Math.min(EH - 1, Math.round(yA)));
+      const i1 = Math.max(i0 + 1, Math.min(EH, Math.round(yB)));
+      let s = 0;
+      for (let i = i0; i < i1; i++) s += arr[i];
+      return s / (i1 - i0);
+    };
+    const pPaperL = Math.max(
+      meanProfSeg(L_prof, Math.max(4, yTi_L - 14), Math.max(6, yTi_L - 3)),
+      0.5 * (meanProfSeg(L_prof, ybi_L[1] + 6, ybi_L[2] - 6) + meanProfSeg(L_prof, ybi_L[3] + 6, ybi_L[4] - 6))
+    );
+    const pPaperR = Math.max(
+      meanProfSeg(R_prof, Math.max(4, yTi_R - 14), Math.max(6, yTi_R - 3)),
+      0.5 * (meanProfSeg(R_prof, ybi_R[0] + 6, ybi_R[1] - 6) + meanProfSeg(R_prof, ybi_R[2] + 6, ybi_R[3] - 6))
+    );
+    const pPaperEst = 0.5 * (pPaperL + pPaperR);
 
     const colMedianProf = (rows) => {
       const prof = new Float32Array(EW);
       const rBuf = new Float32Array(rows.length);
       for (let x = 0; x < EW; x++) {
-        for (let i = 0; i < rows.length; i++) rBuf[i] = expLum[rows[i] * EW + x];
+        for (let i = 0; i < rows.length; i++) rBuf[i] = expNorm[rows[i] * EW + x];
         prof[x] = medianOfSortedBuf(rBuf, rows.length);
       }
       return prof;
     };
 
-    const detectEdgeInBand = (xCanon, dirOut, rows, rad) => {
+    const hdrRowsL = clampRows(detYs0[0] + 6, detYs0[1] - 2);
+    const hdrRowsR = clampRows(detYs3[0] + 6, detYs3[1] - 2);
+    const hdrMedLProf = colMedianProf(hdrRowsL.length ? hdrRowsL : [PAD_Y + 30]);
+    const hdrMedRProf = colMedianProf(hdrRowsR.length ? hdrRowsR : [PAD_Y + 30]);
+    let hdrLSum = 0, hdrLCnt = 0, hdrRSum = 0, hdrRCnt = 0;
+    for (let x = PAD_X + 36; x < PAD_X + 120; x += 2) { hdrLSum += hdrMedLProf[x]; hdrLCnt++; }
+    for (let x = PAD_X + 880; x < PAD_X + 964; x += 2) { hdrRSum += hdrMedRProf[x]; hdrRCnt++; }
+    const pGrayHdrL = hdrLCnt ? hdrLSum / hdrLCnt : meanProfSeg(L_prof, yTi_L + 8, ybi_L[0] - 5);
+    const pGrayHdrR = hdrRCnt ? hdrRSum / hdrRCnt : meanProfSeg(R_prof, yTi_R + 8, ybi_R[0] - 5);
+    const pGrayHdrMed = 0.5 * (pGrayHdrL + pGrayHdrR);
+    const bandContrastL = Math.max(6.0, pPaperL - pGrayHdrL);
+    const bandContrastR = Math.max(6.0, pPaperR - pGrayHdrR);
+    const bandContrastMed = Math.max(6.0, pPaperEst - pGrayHdrMed);
+    const isFadedCopy = bandContrastMed < 42.0 || Math.min(bandContrastL, bandContrastR) < 34.0;
+
+    const sideCalib = (dirOut) => {
+      const pP = dirOut < 0 ? pPaperL : pPaperR;
+      const pG = dirOut < 0 ? pGrayHdrL : pGrayHdrR;
+      const bC = Math.max(6.0, pP - pG);
+      if (!isFadedCopy) {
+        return { pPaper: pP, outFl: Math.min(0.80 * pWhite, pP - 28.0), inCl: pG + 0.65 * bC, pGray: pG, bC, minSc: 18.0 };
+      }
+      return {
+        pPaper: pP,
+        outFl: Math.min(0.80 * pP, pP - 22.0),
+        inCl: pG + 0.68 * bC,
+        pGray: pG,
+        bC,
+        minSc: Math.max(4.5, 0.28 * bC)
+      };
+    };
+    const outFloor2 = isFadedCopy ? Math.min(0.78 * pPaperEst, pPaperEst - 24.0) : 0.78 * pWhite;
+    const inCeil2 = isFadedCopy ? (pGrayHdrMed + 0.68 * bandContrastMed) : 0.90 * pWhite;
+    const gutterMinScore2 = isFadedCopy ? Math.max(3.5, 0.20 * bandContrastMed) : 12.0;
+
+    const detectEdgeInBand = (xCanon, dirOut, rows, rad, isHeaderBand) => {
       const prof = colMedianProf(rows);
+      const cal = sideCalib(dirOut);
       const xC = Math.round(PAD_X + xCanon);
+      // Local row-band paper white from IN-BOUNDS pixels only (zero OOB contamination on tight crops like kqt6Bao!)
+      const midR = rows[rows.length >> 1] || (EH >> 1);
+      const wSamps = [];
+      const wSpan = Math.min(rad + 14, 34);
+      const wLo = dirOut < 0 ? Math.max(4, xC - wSpan) : Math.max(4, xC - 4);
+      const wHi = dirOut < 0 ? Math.min(EW - 4, xC + 4) : Math.min(EW - 4, xC + wSpan);
+      for (let k = wLo; k < wHi; k++) {
+        if (!expOob[midR * EW + k]) wSamps.push(prof[k]);
+      }
+      wSamps.sort((a, b) => a - b);
+      const bandWhite = wSamps.length >= 6
+        ? wSamps[Math.min(wSamps.length - 1, Math.floor(wSamps.length * 0.85))]
+        : cal.pPaper;
       let bestX = xC, bestS = -1e9;
       for (let dx = -rad; dx <= rad; dx++) {
         const x = xC + dx;
-        if (x < 24 || x >= EW - 24) continue;
+        if (x < 26 || x >= EW - 26) continue;
         let outW = 0, outMin = 255, inG = 0, inFar = 0, outExt = 0;
         if (dirOut < 0) {
           for (let k = x - 14; k < x - 2; k++) outW += prof[k];
           outW /= 12;
           for (let k = x - 11; k < x - 3; k++) if (prof[k] < outMin) outMin = prof[k];
+          for (let k = x - 24; k < x - 14; k++) outExt += prof[k];
+          outExt /= 10;
           for (let k = x + 2; k < x + 11; k++) inG += prof[k];
           inG /= 9;
           for (let k = x + 11; k < x + 22; k++) inFar += prof[k];
           inFar /= 11;
-          outExt = 255;
         } else {
           for (let k = x + 3; k < x + 15; k++) outW += prof[k];
           outW /= 12;
           for (let k = x + 3; k < x + 12; k++) if (prof[k] < outMin) outMin = prof[k];
+          for (let k = x + 14; k < x + 25; k++) outExt += prof[k];
+          outExt /= 11;
           for (let k = x - 11; k < x - 2; k++) inG += prof[k];
           inG /= 9;
           for (let k = x - 22; k < x - 11; k++) inFar += prof[k];
           inFar /= 11;
-          for (let k = x + 14; k < x + 24; k++) outExt += prof[k];
-          outExt /= 10;
         }
         const lineV = Math.min(prof[x - 1], prof[x], prof[x + 1]);
-        let sc = (outW - inG) * 1.65 + (outW - lineV) * 1.05 - 0.14 * Math.abs(dx);
-        if (dirOut > 0 && outExt < outFloor) sc -= 150.0;
-        if (inFar > inCeil + 8.0) sc -= 60.0;
-        if (outMin < outFloor) sc -= 140.0;
-        if (inG > inCeil) sc -= 110.0;
+        const maxDrop = cal.bC * 1.25 + 8.0;
+        const effInDrop = Math.min(maxDrop, outW - inG);
+        const effLineDrop = Math.min(cal.bC * 1.40 + 14.0, outW - lineV);
+        let sc = effInDrop * 1.65 + effLineDrop * 1.05 - 0.14 * Math.abs(dx);
+
+        const localGap = bandWhite - outW;
+        if (localGap > Math.max(10.0, 0.42 * cal.bC)) sc -= (localGap - Math.max(10.0, 0.42 * cal.bC)) * 3.5;
+        if (outW < Math.min(cal.outFl - 16.0, bandWhite - 36.0)) sc -= 140.0;
+        if (outMin < outW - Math.max(24.0, cal.bC * 0.65)) sc -= 130.0;
+        if (dirOut > 0 && outExt < outW - Math.max(22.0, cal.bC * 0.60) && outExt < bandWhite - Math.max(14.0, 0.45 * cal.bC)) {
+          sc -= 140.0;
+        }
+
+        const localMinDrop = Math.max(4.5, 0.28 * cal.bC);
+        if (inG > outW - localMinDrop) sc -= 110.0;
+        if (inFar > outW - localMinDrop * 0.45 + 8.0) sc -= 60.0;
+        if (!isHeaderBand && inG < outW - cal.bC * 1.55 - 16.0) sc -= 135.0;
+
         if (sc > bestS) {
           bestS = sc;
           bestX = x;
@@ -18011,8 +18962,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       let ym = 0;
       for (let i = 0; i < rows.length; i++) ym += rows[i];
       ym /= Math.max(1, rows.length);
-      return { x: bestX, score: bestS, ym };
+      return { x: bestX, score: bestS, ym, minSc: cal.minSc };
     };
+
+    function medianNumLocal(arr) {
+      if (!arr.length) return 0;
+      const s = arr.slice().sort((a, b) => a - b);
+      const m = s.length >> 1;
+      return (s.length & 1) ? s[m] : 0.5 * (s[m - 1] + s[m]);
+    }
 
     const fitLinePts = (valsXY, fallbackX) => {
       if (!valsXY.length) return () => fallbackX;
@@ -18033,28 +18991,40 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       return (yTarget) => inter + slope * yTarget;
     };
 
-    function medianNumLocal(arr) {
-      if (!arr.length) return 0;
-      const s = arr.slice().sort((a, b) => a - b);
-      const m = s.length >> 1;
-      return (s.length & 1) ? s[m] : 0.5 * (s[m - 1] + s[m]);
-    }
-
     const fitRobustEdgeLine = (xCanon, dirOut, bandSpecs, rad) => {
       const pts = [];
       for (let i = 0; i < bandSpecs.length; i++) {
         const rows = bandSpecs[i];
         if (rows.length < 6) continue;
-        const det = detectEdgeInBand(xCanon, dirOut, rows, rad);
-        if (det.score > 20.0) pts.push({ y: det.ym, x: det.x });
+        const det = detectEdgeInBand(xCanon, dirOut, rows, rad, i === 0);
+        if (det.score > det.minSc) pts.push({ y: det.ym, x: det.x, isHdr: i === 0 });
       }
       if (pts.length < 2) {
         const fbRows = [];
         for (let i = 0; i < bandSpecs.length; i++) {
           for (let j = 0; j < bandSpecs[i].length; j++) fbRows.push(bandSpecs[i][j]);
         }
-        const det = detectEdgeInBand(xCanon, dirOut, fbRows.length ? fbRows : [EH >> 1], rad);
+        const det = detectEdgeInBand(xCanon, dirOut, fbRows.length ? fbRows : [EH >> 1], rad, false);
         return () => det.x;
+      }
+      if (pts.length >= 3 && pts[0].isHdr) {
+        const xHdr = pts[0].x;
+        const maxIn = searchRadX >= 40 ? 28 : 14;
+        const maxAbs = searchRadX >= 40 ? 46 : 20;
+        let filtered = pts.filter((p) => {
+          const inward = dirOut < 0 ? (p.x - xHdr) : (xHdr - p.x);
+          return p.isHdr || (inward <= maxIn && Math.abs(p.x - xHdr) <= maxAbs);
+        });
+        if (filtered.length >= 3) {
+          const p0 = filtered[0], p1 = filtered[1], pLast = filtered[filtered.length - 1];
+          const sl01 = (p1.x - p0.x) / Math.max(40, p1.y - p0.y);
+          const predLast = p0.x + sl01 * (pLast.y - p0.y);
+          const inwardDev = dirOut < 0 ? (pLast.x - predLast) : (predLast - pLast.x);
+          if (inwardDev > (searchRadX >= 40 ? 16 : 8)) {
+            filtered = filtered.slice(0, filtered.length - 1);
+          }
+        }
+        if (filtered.length >= 2) return fitLinePts(filtered, PAD_X + xCanon);
       }
       return fitLinePts(pts, PAD_X + xCanon);
     };
@@ -18087,13 +19057,16 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         for (let k = xg - 12; k < xg - 5; k++) if (prof[k] < leftEdge) leftEdge = prof[k];
         for (let k = xg + 5; k < xg + 13; k++) if (prof[k] < rightEdge) rightEdge = prof[k];
         let sc = inside - 0.5 * (leftEdge + rightEdge) - 0.14 * Math.abs(xg - xMid);
-        let okBand = (inside >= outFloor - 12.0) && (insideMin >= outFloor - 28.0);
+        let okBand = (inside >= outFloor2 - 12.0) && (insideMin >= outFloor2 - 28.0);
         if (isHdr) {
           let inLHdr = 0, inRHdr = 0;
           for (let k = xg - 26; k < xg - 12; k++) inLHdr += prof[k];
           for (let k = xg + 12; k < xg + 26; k++) inRHdr += prof[k];
           inLHdr /= 14; inRHdr /= 14;
-          if (inLHdr > inCeil || inRHdr > inCeil) {
+          const failHdr = isFadedCopy
+            ? (inLHdr > inside - Math.max(4.0, 0.25 * bandContrastL) || inRHdr > inside - Math.max(4.0, 0.25 * bandContrastR))
+            : (inLHdr > inCeil2 || inRHdr > inCeil2);
+          if (failHdr) {
             okBand = false;
             sc -= 180.0;
           }
@@ -18126,8 +19099,8 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       { isHdr: false, rows: clampRows(Math.max(detYs0[5], detYs3[5]), Math.min(EH - 2, Math.min(detYs0[6], detYs3[6]))) },
     ];
     const gPtsL = [], gPtsR = [];
-    const radHdr = searchRadX >= 40 ? 28 : 14;
-    const radBody = searchRadX >= 40 ? 24 : 12;
+    const radHdr = searchRadX >= 40 ? 64 : 16;
+    const radBody = searchRadX >= 40 ? 54 : 14;
     for (let i = 0; i < gutterBands.length; i++) {
       const { isHdr, rows } = gutterBands[i];
       if (rows.length < 6) continue;
@@ -18136,7 +19109,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       ym /= rows.length;
       const estM = (interpXL(ym) - PAD_X) + 0.5 * (interpXR(ym) - interpXL(ym));
       const gd = detectGutterInBand(rows, estM, isHdr ? radHdr : radBody, isHdr);
-      if (gd.okBand && gd.score > 12.0) {
+      if (gd.okBand && gd.score > gutterMinScore2) {
         gPtsL.push({ y: gd.ym, x: gd.xlr });
         gPtsR.push({ y: gd.ym, x: gd.xrl });
       }
@@ -18149,40 +19122,39 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const yBChk = detYs3[5] - 30;
     const wLt = interpXLR(yTChk) - interpXL(yTChk), wLb = interpXLR(yBChk) - interpXL(yBChk);
     const wRt = interpXR(yTChk) - interpXRL(yTChk), wRb = interpXR(yBChk) - interpXRL(yBChk);
-    if (!(0.86 * wLt <= wRt && wRt <= 1.14 * wLt) || !(0.86 * wLb <= wRb && wRb <= 1.14 * wLb)) {
-      const rRatio = wRt / Math.max(1, wRb);
-      if (!(0.88 <= rRatio && rRatio <= 1.12) || wRt < 410 || wRt > 550 || wRb < 410 || wRb > 550) {
-        const estXR = [];
-        for (let i = 0; i < R_bands.length; i++) {
-          const rows = R_bands[i];
-          if (rows.length < 6) continue;
-          let ym = 0;
-          for (let r = 0; r < rows.length; r++) ym += rows[r];
-          ym /= rows.length;
-          const wLy = interpXLR(ym) - interpXL(ym);
-          const det = detectEdgeInBand((interpXRL(ym) - PAD_X) + Math.max(420, Math.min(530, wLy)), 1, rows, 24);
-          estXR.push({ y: ym, x: det.x });
-        }
-        if (estXR.length >= 2) interpXR = fitLinePts(estXR, PAD_X + ANS_W);
+    const ratioTop = wRt / Math.max(1, wLt);
+    const ratioBot = wRb / Math.max(1, wLb);
+    const asymTB = Math.abs(ratioTop - ratioBot);
+
+    if (wRt < 0.91 * wLt || wRb < 0.91 * wLb || (asymTB > 0.032 && (wRb < wLb * 0.965 || wRt < wLt * 0.965))) {
+      const estXR = [];
+      for (let i = 0; i < R_bands.length; i++) {
+        const rows = R_bands[i];
+        if (rows.length < 6) continue;
+        let ym = 0;
+        for (let r = 0; r < rows.length; r++) ym += rows[r];
+        ym /= rows.length;
+        const wLy = interpXLR(ym) - interpXL(ym);
+        const det = detectEdgeInBand((interpXRL(ym) - PAD_X) + Math.max(430, Math.min(535, wLy)), 1, rows, searchRadX >= 40 ? 32 : 20, i === 0);
+        if (det.score > det.minSc) estXR.push({ y: ym, x: det.x });
       }
+      if (estXR.length >= 2) interpXR = fitLinePts(estXR, PAD_X + ANS_W);
     }
-    if (!(0.86 * wRt <= wLt && wLt <= 1.14 * wRt) || !(0.86 * wRb <= wLb && wLb <= 1.14 * wRb)) {
-      if (wLt < 410 || wLt > 550 || wLb < 410 || wLb > 550) {
-        const wRt2 = interpXR(yTChk) - interpXRL(yTChk), wRb2 = interpXR(yBChk) - interpXRL(yBChk);
-        if (wRt2 >= 420 && wRt2 <= 535 && wRb2 >= 420 && wRb2 <= 535) {
-          const estXL = [];
-          for (let i = 0; i < L_bands.length; i++) {
-            const rows = L_bands[i];
-            if (rows.length < 6) continue;
-            let ym = 0;
-            for (let r = 0; r < rows.length; r++) ym += rows[r];
-            ym /= rows.length;
-            const det = detectEdgeInBand((interpXLR(ym) - PAD_X) - (interpXR(ym) - interpXRL(ym)), -1, rows, 24);
-            estXL.push({ y: ym, x: det.x });
-          }
-          if (estXL.length >= 2) interpXL = fitLinePts(estXL, PAD_X);
-        }
+    const wRt2 = interpXR(yTChk) - interpXRL(yTChk), wRb2 = interpXR(yBChk) - interpXRL(yBChk);
+    const asymTB2 = Math.abs(wRt2 / Math.max(1, wLt) - wRb2 / Math.max(1, wLb));
+    if (wLt < 0.91 * wRt2 || wLb < 0.91 * wRb2 || (asymTB2 > 0.032 && (wLb < wRb2 * 0.965 || wLt < wRt2 * 0.965))) {
+      const estXL = [];
+      for (let i = 0; i < L_bands.length; i++) {
+        const rows = L_bands[i];
+        if (rows.length < 6) continue;
+        let ym = 0;
+        for (let r = 0; r < rows.length; r++) ym += rows[r];
+        ym /= rows.length;
+        const wRy = interpXR(ym) - interpXRL(ym);
+        const det = detectEdgeInBand((interpXLR(ym) - PAD_X) - Math.max(430, Math.min(535, wRy)), -1, rows, searchRadX >= 40 ? 32 : 20, i === 0);
+        if (det.score > det.minSc) estXL.push({ y: ym, x: det.x });
       }
+      if (estXL.length >= 2) interpXL = fitLinePts(estXL, PAD_X);
     }
 
     const tlSrc = applyHomography(H0, interpXL(detYs0[0]) - PAD_X, detYs0[0] - PAD_Y);
@@ -18205,7 +19177,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     };
 
     if (!buildWarpedImage) {
-      return { snappedCorners };
+      return { snappedCorners, hasShadowResid };
     }
 
     const canonYs = [0, ...CANON_BAND_Y];
@@ -18330,11 +19302,90 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       }
       wctx.putImageData(wImg, 0, 0);
     } else {
-      const p1 = singlePassSnap(srcPixels, sw, sh, corners, 64, false);
-      if (!p1) return null;
-      const p1b = singlePassSnap(srcPixels, sw, sh, p1.snappedCorners, 28, false);
-      if (!p1b) return null;
-      const p2 = singlePassSnap(srcPixels, sw, sh, p1b.snappedCorners, 14, true);
+      // Build tiny 720px gray + localShadow field ONLY when needed for fingerprint arbitration (~8ms)
+      let _fpCache = null;
+      const evalSnapFp = (cand, withSym = true) => {
+        if (!cand) return -1e9;
+        if (!_fpCache) {
+          const sc = Math.min(1, 720 / Math.max(sw, sh));
+          const dw = Math.max(80, Math.round(sw * sc)), dh = Math.max(80, Math.round(sh * sc));
+          const g = new Float32Array(dw * dh);
+          for (let y = 0; y < dh; y++) {
+            const sy = Math.min(sh - 1, Math.round(y / sc));
+            for (let x = 0; x < dw; x++) {
+              const sx = Math.min(sw - 1, Math.round(x / sc));
+              const i4 = (sy * sw + sx) * 4;
+              g[y * dw + x] = 0.299 * srcPixels[i4] + 0.587 * srcPixels[i4 + 1] + 0.114 * srcPixels[i4 + 2];
+            }
+          }
+          const gQ = buildNormalizedGray(g, dw, dh);
+          const gL = buildLocalShadowNormGray(g, dw, dh, 0.050);
+          _fpCache = { sc, dw, dh, g, gQ, gL };
+        }
+        const fQ = scoreCandidateOnRawGray(_fpCache.gQ, _fpCache.dw, _fpCache.dh, cand, _fpCache.sc);
+        const fL = scoreCandidateOnRawGray(_fpCache.gL, _fpCache.dw, _fpCache.dh, cand, _fpCache.sc);
+        const best = fQ.total >= fL.total ? fQ : fL;
+        let symPen = 0;
+        if (withSym && cand.listenCorners && cand.readCorners) {
+          const wLt = Math.hypot(cand.listenCorners.tr.x - cand.tl.x, cand.listenCorners.tr.y - cand.tl.y);
+          const wLb = Math.hypot(cand.listenCorners.br.x - cand.bl.x, cand.listenCorners.br.y - cand.bl.y);
+          const wRt = Math.hypot(cand.tr.x - cand.readCorners.tl.x, cand.tr.y - cand.readCorners.tl.y);
+          const wRb = Math.hypot(cand.br.x - cand.readCorners.bl.x, cand.br.y - cand.readCorners.bl.y);
+          const tbDiff = Math.abs(wRt / Math.max(1, wLt) - wRb / Math.max(1, wLb));
+          if (tbDiff > 0.020) symPen -= (tbDiff - 0.020) * 1400;
+        }
+        return best.total + symPen + (best.gutPos >= 9 ? 40 : 0) + (best.outMin >= 0.03 ? 40 : (best.outMin < 0 ? -120 : 0));
+      };
+
+      const runChain = (initC, r1, normRad) => {
+        const a = singlePassSnap(srcPixels, sw, sh, initC, r1, false, normRad);
+        if (!a) return null;
+        const b = singlePassSnap(srcPixels, sw, sh, a.snappedCorners, 22, false, normRad);
+        if (!b) return null;
+        return { corners: b.snappedCorners, hasShadowResid: a.hasShadowResid || b.hasShadowResid, normRad };
+      };
+
+      const rad1 = (corners && corners.mode === 'ets-grid') ? 66 : 72;
+      let chosen = runChain(corners, rad1, 0);
+      if (!chosen) return null;
+
+      // Fast check: only run shadow-mode / S1-guard arbitration if shadow residue detected OR large drift from S1!
+      const maxMoveFromS1 = Math.max(
+        Math.hypot(chosen.corners.tl.x - corners.tl.x, chosen.corners.tl.y - corners.tl.y),
+        Math.hypot(chosen.corners.tr.x - corners.tr.x, chosen.corners.tr.y - corners.tr.y),
+        Math.hypot(chosen.corners.bl.x - corners.bl.x, chosen.corners.bl.y - corners.bl.y),
+        Math.hypot(chosen.corners.br.x - corners.br.x, chosen.corners.br.y - corners.br.y)
+      );
+      if (chosen.hasShadowResid || maxMoveFromS1 > 22) {
+        let bestScore = evalSnapFp(chosen.corners);
+        // Candidate B: Sharp Local Shadow-Killer snap (0.058) — nails circular flash, diagonal & vertical shadow bands!
+        const candL58 = runChain(corners, rad1, 0.058);
+        if (candL58) {
+          const sc58 = evalSnapFp(candL58.corners);
+          if (sc58 > bestScore + 15) { bestScore = sc58; chosen = candL58; }
+        }
+        // Candidate C: Medium Local Shadow snap (0.088) — nails faded + shadow compounds (case_092, case_096)!
+        const candL88 = runChain(corners, rad1, 0.088);
+        if (candL88) {
+          const sc88 = evalSnapFp(candL88.corners);
+          if (sc88 > bestScore + 15) { bestScore = sc88; chosen = candL88; }
+        }
+        // Candidate D: Tight snap around S1 (rad=16) — protects dead-on S1 on faded+flash sheets like case_056!
+        if (corners && corners.mode === 'ets-grid' && maxMoveFromS1 > 22) {
+          const candTight = runChain(corners, 16, 0);
+          if (candTight) {
+            const scT = evalSnapFp(candTight.corners);
+            if (scT > bestScore + 15) { bestScore = scT; chosen = candTight; }
+          }
+          const scS1 = evalSnapFp(corners, false);
+          if (scS1 > evalSnapFp(chosen.corners, false) + 25) {
+            bestScore = scS1;
+            chosen = { corners, normRad: 0 };
+          }
+        }
+      }
+
+      const p2 = singlePassSnap(srcPixels, sw, sh, chosen.corners, 10, true, chosen.normRad);
       if (!p2) return null;
       warpedCanvas = p2.warpedCanvas;
       wData = p2.wData;
@@ -18371,18 +19422,26 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       return out;
     }
 
-    // 40-sub-block (8 columns x 5 row-bands) Coarse-to-Fine [-10..10 x -5..5] + Parabolic Subpixel + 2D Grid Regularization
+    // 40-sub-block (8 columns x 5 row-bands) 4-Quadrant Ring-Symmetric Coarse-to-Fine [-5..5 x -3..3] + Parabolic Subpixel + 2D Grid Regularization
+    // 4-quadrant ring symmetry ensures faded white-band circles NEVER pull sideways onto adjacent dark filled bubbles!
     const evalBlockShift = (rowCenters, dx, dy) => {
-      let sc = -0.14 * (dx * dx) - 0.28 * (dy * dy);
+      let sc = -0.28 * (dx * dx) - 0.42 * (dy * dy);
       for (let r = 0; r < rowCenters.length; r++) {
         const rPts = rowCenters[r];
         const pairs = [];
         for (let k = 0; k < rPts.length; k++) {
           const px = rPts[k].x + dx, py = rPts[k].y + dy;
           const wv = sampleOffsetsArr(wLum, px, py, OFF_WHITE_ANN);
-          const bv = sampleOffsetsArr(wLum, px, py, OFF_BLACK_RING);
           const lv = sampleOffsetsArr(wLum, px, py, OFF_LETTER);
-          pairs.push({ wv, cand: 1.35 * (wv - bv) + 0.35 * Math.max(0, wv - lv) });
+          const d0 = Math.min(42, Math.max(-15, wv - sampleOffsetsArr(wLum, px, py, OFF_RING_Q[0])));
+          const d1 = Math.min(42, Math.max(-15, wv - sampleOffsetsArr(wLum, px, py, OFF_RING_Q[1])));
+          const d2 = Math.min(42, Math.max(-15, wv - sampleOffsetsArr(wLum, px, py, OFF_RING_Q[2])));
+          const d3 = Math.min(42, Math.max(-15, wv - sampleOffsetsArr(wLum, px, py, OFF_RING_Q[3])));
+          // True circular outline is darker than wv on ALL 4 sides; grazing a filled neighbor only darkens 1 side!
+          const qArr = [d0, d1, d2, d3].sort((a, b) => a - b);
+          const ringScore = 0.45 * ((d0 + d1 + d2 + d3) * 0.25) + 0.35 * qArr[1] + 0.20 * qArr[0];
+          const letScore = Math.min(35, Math.max(0, wv - lv));
+          pairs.push({ wv, cand: 1.45 * ringScore + 0.40 * letScore });
         }
         pairs.sort((a, bPair) => bPair.wv - a.wv);
         sc += pairs[0].cand + pairs[1].cand;
@@ -18397,19 +19456,22 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         const qStart = c * 25 + b * 5 + 1;
         const rowCenters = [];
         for (let q = qStart; q < qStart + 5; q++) {
-          rowCenters.push([getBubbleCenter(q, 0), getBubbleCenter(q, 1), getBubbleCenter(q, 2)]);
+          const isP2Row = q >= 7 && q <= 31;
+          rowCenters.push(isP2Row
+            ? [getBubbleCenter(q, 0), getBubbleCenter(q, 1), getBubbleCenter(q, 2)]
+            : [getBubbleCenter(q, 0), getBubbleCenter(q, 1), getBubbleCenter(q, 2), getBubbleCenter(q, 3)]);
         }
         let bestSc = -1e9, cDx = 0, cDy = 0;
-        for (let dy = -4; dy <= 4; dy += 2) {
-          for (let dx = -10; dx <= 10; dx += 2) {
+        for (let dy = -3; dy <= 3; dy += 2) {
+          for (let dx = -5; dx <= 5; dx += 2) {
             const sc = evalBlockShift(rowCenters, dx, dy);
             if (sc > bestSc) { bestSc = sc; cDx = dx; cDy = dy; }
           }
         }
         const fineScores = {};
         let fineBest = -1e9, bestDx = cDx, bestDy = cDy;
-        const yLo = Math.max(-5, cDy - 2), yHi = Math.min(5, cDy + 2);
-        const xLo = Math.max(-10, cDx - 2), xHi = Math.min(10, cDx + 2);
+        const yLo = Math.max(-4, cDy - 2), yHi = Math.min(4, cDy + 2);
+        const xLo = Math.max(-5, cDx - 2), xHi = Math.min(5, cDx + 2);
         for (let dy = yLo; dy <= yHi; dy++) {
           for (let dx = xLo; dx <= xHi; dx++) {
             const sc = evalBlockShift(rowCenters, dx, dy);
@@ -18436,6 +19498,16 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       return (s.length & 1) ? s[m] : 0.5 * (s[m - 1] + s[m]);
     };
 
+    // Column-level outlier clamp before 2D spatial smoothing (a single white band cannot shear >2.5px from its own column!)
+    for (let c = 0; c < 8; c++) {
+      const colMedX = medianNum(Array.from(rawDx[c]));
+      const colMedY = medianNum(Array.from(rawDy[c]));
+      for (let b = 0; b < 5; b++) {
+        rawDx[c][b] = colMedX + Math.max(-2.5, Math.min(2.5, rawDx[c][b] - colMedX));
+        rawDy[c][b] = colMedY + Math.max(-2.0, Math.min(2.0, rawDy[c][b] - colMedY));
+      }
+    }
+
     let curDx = rawDx.map((row) => Float32Array.from(row));
     let curDy = rawDy.map((row) => Float32Array.from(row));
     for (let it = 0; it < 4; it++) {
@@ -18444,15 +19516,16 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       for (let c = 0; c < 8; c++) {
         const c0 = c < 4 ? 0 : 4;
         const c1 = c < 4 ? 3 : 7;
+        const colMedX = medianNum(Array.from(rawDx[c]));
         const colMedY = medianNum(Array.from(rawDy[c]));
         for (let b = 0; b < 5; b++) {
-          const nx = [rawDx[c][b]];
+          const nx = [rawDx[c][b], colMedX];
           const ny = [rawDy[c][b], colMedY];
           if (b > 0) { nx.push(curDx[c][b - 1]); ny.push(curDy[c][b - 1]); }
           if (b < 4) { nx.push(curDx[c][b + 1]); ny.push(curDy[c][b + 1]); }
           if (c > c0) { nx.push(curDx[c - 1][b]); ny.push(curDy[c - 1][b]); }
           if (c < c1) { nx.push(curDx[c + 1][b]); ny.push(curDy[c + 1][b]); }
-          nxtDx[c][b] = 0.55 * medianNum(nx) + 0.45 * rawDx[c][b];
+          nxtDx[c][b] = 0.65 * medianNum(nx) + 0.35 * rawDx[c][b];
           nxtDy[c][b] = 0.65 * medianNum(ny) + 0.35 * rawDy[c][b];
         }
       }
@@ -18463,25 +19536,6 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const subblockShifts = Array.from({ length: 8 }, (_, c) =>
       Array.from({ length: 5 }, (__, b) => ({ dx: curDx[c][b], dy: curDy[c][b] }))
     );
-
-    // Embedded OMR_MLP v7.1 (12 -> 16 ReLU -> 1 Sigmoid) trained on 86,832 real (4 ETS sheets + external OMRChecker dataset) + augmented bubble patches
-    const OMR_MLP = {
-      W1: [[0.22926, 0.0, -0.0, 0.22117, -0.17329, -0.20603, 0.2712, -0.15795, -0.16696, -0.16648, -0.17029, -0.20718, -0.21556, 0.22996, 0.25821, 0.24237], [0.22325, -0.0, 0.0, 0.21333, -0.16925, -0.19755, 0.26106, -0.14787, -0.1571, -0.15768, -0.16117, -0.19873, -0.20714, 0.2232, 0.24984, 0.23503], [0.1058, 0.0, 0.0, 0.104, -0.07159, -0.08258, 0.12793, -0.03946, -0.04254, -0.04406, -0.04988, -0.08258, -0.0896, 0.1092, 0.12284, 0.11181], [0.02156, -0.0, 0.0, 0.02432, -0.00245, 0.00101, 0.03166, 0.04051, 0.04175, 0.03936, 0.03148, 0.00195, -0.00409, 0.02705, 0.03042, 0.02318], [0.12264, 0.0, -0.0, 0.12058, -0.08438, -0.08882, 0.14199, -0.03866, -0.04116, -0.0453, -0.05213, -0.08929, -0.09826, 0.12212, 0.13598, 0.12866], [0.15424, 0.0, -0.0, 0.14942, -0.11123, -0.12216, 0.17918, -0.07016, -0.07372, -0.07683, -0.08388, -0.1228, -0.13175, 0.15366, 0.17373, 0.16155], [-0.08115, 0.0, 0.0, -0.07224, 0.07582, 0.07909, -0.08407, 0.08421, 0.08498, 0.08514, 0.08388, 0.0808, 0.08139, -0.07299, -0.07849, -0.08305], [-0.06567, -0.0, -0.0, -0.05389, 0.04708, 0.05291, -0.05914, 0.04151, 0.04329, 0.04491, 0.04343, 0.05459, 0.06211, -0.05191, -0.05747, -0.06651], [0.16651, 0.0, 0.0, 0.16228, -0.12088, -0.14165, 0.19848, -0.09398, -0.09948, -0.09905, -0.10558, -0.14219, -0.15018, 0.16856, 0.18949, 0.17578], [0.74498, -0.00588, -0.00073, 0.6656, -0.67891, -0.74106, 0.83932, -0.80647, -0.75017, -0.79226, -0.75578, -0.73061, -0.79092, 0.71171, 0.77708, 0.78188], [0.60493, 1e-05, 0.0, 0.56965, -0.52055, -0.60083, 0.70284, -0.56271, -0.59984, -0.59706, -0.5844, -0.61128, -0.61662, 0.59419, 0.66359, 0.63819], [-0.06582, -0.0, -0.0, -0.07308, 0.0689, 0.08005, -0.06919, 0.07952, 0.08367, 0.08375, 0.0811, 0.07745, 0.07165, -0.05964, -0.06431, -0.06414]],
-      b1: [0.33662, -0.2301, -0.17632, 0.1503, 0.97276, 1.01867, 0.31133, 0.80162, 0.81185, 0.85007, 0.85217, 1.02193, 1.10017, 0.25324, 0.24903, 0.34694],
-      W2: [1.07402, 0.01061, 6e-05, 0.97442, -0.9215, -1.0565, 1.19692, -1.04087, -1.08885, -1.09747, -1.06074, -1.06884, -1.08382, 1.01565, 1.12765, 1.1178],
-      b2: -0.52514
-    };
-
-    function evalOmrMlp(feat12) {
-      let z2 = OMR_MLP.b2;
-      for (let j = 0; j < 16; j++) {
-        let z1 = OMR_MLP.b1[j];
-        for (let i = 0; i < 12; i++) z1 += feat12[i] * OMR_MLP.W1[i][j];
-        if (z1 > 0) z2 += z1 * OMR_MLP.W2[j];
-      }
-      const clamped = Math.max(-20, Math.min(20, z2));
-      return 1 / (1 + Math.exp(-clamped));
-    }
 
     const letters = ['A', 'B', 'C', 'D'];
     const answers = {};
@@ -18494,7 +19548,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       return vals.map((v) => (ref - v) / ref);
     };
 
-    // Read all 200 rows using true physical radii + letter-obliteration contrast + OMR_MLP v7.0
+    const subBase = (vals) => {
+      const sv = vals.slice().sort((a, b) => a - b);
+      const base = 0.5 * (sv[0] + sv[1]);
+      return vals.map((v) => Math.max(0, v - base));
+    };
+
+    const meanOf = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 255);
+
+    // Read all 200 rows using 16 physical features (incl. neighbor-safe slash rays & fill solidness) + OMR_MLP v8.0
     for (let q = 1; q <= 200; q++) {
       const isPart2 = q >= 7 && q <= 31;
       const colIdx = Math.floor((q - 1) / 25);
@@ -18502,31 +19564,40 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       const shf = subblockShifts[colIdx][bandIdx];
 
       const wannM = [], diskM = [], letM = [], pwM = [], oblitM = [], stdM = [], redM = [], blueM = [];
+      const diskSortedList = [], bgP75 = [], ixyList = [];
 
       for (let k = 0; k < 4; k++) {
         const p = getBubbleCenter(q, k);
         const cx = p.x + shf.dx, cy = p.y + shf.dy;
+        const ix = Math.round(cx), iy = Math.round(cy);
+        ixyList.push({ ix, iy });
+
         const vWann = getSortedOffsetsArr(wGray, cx, cy, OFF_WHITE_ANN);
         const vDisk = getSortedOffsetsArr(wGray, cx, cy, OFF_FULL_DISK);
         const vLet = getSortedOffsetsArr(wGray, cx, cy, OFF_LETTER);
         const vLumDisk = getSortedOffsetsArr(wLum, cx, cy, OFF_FULL_DISK);
         const vLumWann = getSortedOffsetsArr(wLum, cx, cy, OFF_WHITE_ANN);
         const vLumLet = getSortedOffsetsArr(wLum, cx, cy, OFF_LETTER);
+        const vBg = getSortedOffsetsArr(wGray, cx, cy, OFF_BG_DIAMOND);
 
-        const meanOf = (a) => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 255;
+        diskSortedList.push(vDisk);
         wannM.push(meanOf(vWann));
         diskM.push(meanOf(vDisk));
         letM.push(meanOf(vLet));
 
         const nD = vDisk.length;
-        const i0 = Math.floor(nD * 0.50);
-        const i1 = Math.max(i0 + 1, Math.floor(nD * 0.90));
-        let pwSum = 0;
-        for (let i = i0; i < i1; i++) pwSum += vDisk[i];
-        pwM.push(pwSum / (i1 - i0));
+        if (nD) {
+          const i0 = Math.floor(nD * 0.50);
+          const i1 = Math.max(i0 + 1, Math.floor(nD * 0.90));
+          let pwSum = 0;
+          for (let i = i0; i < i1; i++) pwSum += vDisk[i];
+          pwM.push(pwSum / (i1 - i0));
+        } else {
+          pwM.push(255);
+        }
 
-        const p85W = vLumWann[Math.min(vLumWann.length - 1, Math.floor(vLumWann.length * 0.85))] || 255;
-        const p15L = vLumLet[Math.min(vLumLet.length - 1, Math.floor(vLumLet.length * 0.15))] || 0;
+        const p85W = vLumWann.length ? vLumWann[Math.min(vLumWann.length - 1, Math.floor(vLumWann.length * 0.85))] : 255;
+        const p15L = vLumLet.length ? vLumLet[Math.min(vLumLet.length - 1, Math.floor(vLumLet.length * 0.15))] : 0;
         oblitM.push(Math.max(0, p85W - p15L));
 
         const mLD = meanOf(vLumDisk);
@@ -18534,7 +19605,6 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         for (let i = 0; i < vLumDisk.length; i++) varLD += (vLumDisk[i] - mLD) * (vLumDisk[i] - mLD);
         stdM.push(vLumDisk.length ? Math.sqrt(varLD / vLumDisk.length) : 0);
 
-        const ix = Math.round(cx), iy = Math.round(cy);
         let rcSum = 0, bcSum = 0, cnt = 0;
         for (let i = 0; i < OFF_LETTER.length; i++) {
           const xx = ix + OFF_LETTER[i].dx;
@@ -18549,6 +19619,8 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         }
         redM.push(cnt ? (rcSum / cnt) / 255 : 0);
         blueM.push(cnt ? (bcSum / cnt) / 255 : 0);
+
+        bgP75.push(vBg.length ? vBg[Math.min(vBg.length - 1, Math.floor(vBg.length * 0.75))] : 220);
       }
 
       const fWann = relDrop(wannM);
@@ -18570,13 +19642,63 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       const cVar = ((comb[0] - cMean) ** 2 + (comb[1] - cMean) ** 2 + (comb[2] - cMean) ** 2 + (comb[3] - cMean) ** 2) * 0.25;
       const cStd = Math.max(0.04, Math.sqrt(cVar));
 
+      const spw = pwM.slice().sort((a, b) => b - a);
+      const paperRef = Math.max(45, 0.5 * (spw[0] + spw[1]));
+      const solidThr = paperRef * 0.80;
+      const fillSolid = diskSortedList.map((vd) => {
+        if (!vd.length) return 0;
+        let cnt = 0;
+        for (let i = 0; i < vd.length; i++) if (vd[i] < solidThr) cnt++;
+        return cnt / vd.length;
+      });
+
+      const obComb = [0, 1, 2, 3].map((k) => 0.5 * (fOblit[k] + fStd[k]));
+
+      const sbg = bgP75.slice().sort((a, b) => b - a);
+      const rowBgRef = Math.max(45, 0.5 * (sbg[0] + sbg[1]));
+      const ne = subBase(ixyList.map((pt) => evalQuadRay(wGray, pt.ix, pt.iy, RAYS_NE, rowBgRef)));
+      const sw = subBase(ixyList.map((pt) => evalQuadRay(wGray, pt.ix, pt.iy, RAYS_SW, rowBgRef)));
+      const nw = subBase(ixyList.map((pt) => evalQuadRay(wGray, pt.ix, pt.iy, RAYS_NW, rowBgRef)));
+      const se = subBase(ixyList.map((pt) => evalQuadRay(wGray, pt.ix, pt.iy, RAYS_SE, rowBgRef)));
+      const slashPair = [0, 1, 2, 3].map((k) => {
+        const gp = Math.sqrt(ne[k] * sw[k]);
+        const gn = Math.sqrt(nw[k] * se[k]);
+        return Math.max(gp, gn) + 0.35 * Math.min(gp, gn);
+      });
+      const slashBal = [0, 1, 2, 3].map((k) => (
+        0.70 * slashPair[k] + 0.30 * Math.max(0.5 * (ne[k] + sw[k]), 0.5 * (nw[k] + se[k]))
+      ));
+
+      const candLimit = isPart2 ? 3 : 4;
+      let rowMaxComb = comb[0];
+      for (let j = 1; j < candLimit; j++) if (comb[j] > rowMaxComb) rowMaxComb = comb[j];
+      const darkThr = Math.max(0.24, 0.55 * rowMaxComb);
+      const darkCands = [];
+      for (let j = 0; j < candLimit; j++) if (comb[j] >= darkThr) darkCands.push(j);
+
       const allScores = [0, 1, 2, 3].map((k) => {
-        const candLimit = isPart2 ? 3 : 4;
-        let otherBest = 0;
+        let otherBest = -1e9;
+        let otherOb = -1e9;
         for (let j = 0; j < candLimit; j++) {
-          if (j !== k && comb[j] > otherBest) otherBest = comb[j];
+          if (j !== k) {
+            if (comb[j] > otherBest) otherBest = comb[j];
+            if (obComb[j] > otherOb) otherOb = obComb[j];
+          }
         }
-        const mlpProb = evalOmrMlp([
+        if (otherBest < -1e8) otherBest = 0;
+        if (otherOb < -1e8) otherOb = 0;
+
+        let slashVsPeer = 0;
+        if (darkCands.length >= 2 && darkCands.indexOf(k) !== -1) {
+          let otherMinSl = 1e9;
+          for (let d = 0; d < darkCands.length; d++) {
+            const j = darkCands[d];
+            if (j !== k && slashBal[j] < otherMinSl) otherMinSl = slashBal[j];
+          }
+          slashVsPeer = slashBal[k] - otherMinSl;
+        }
+
+        const mlpProb = evalOmrMlpV8([
           fWann[k],
           fPw[k],
           fDisk[k],
@@ -18588,7 +19710,11 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           comb[k],
           comb[k] - otherBest,
           ((comb[k] - cMean) / cStd) * 0.25,
-          (isPart2 && k === 3) ? 1.0 : 0.0
+          fillSolid[k],
+          obComb[k] - otherOb,
+          slashPair[k],
+          slashBal[k],
+          slashVsPeer
         ]);
         return {
           letter: letters[k],
@@ -18597,7 +19723,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         };
       });
 
-      const candScores = (isPart2 ? allScores.slice(0, 3) : allScores).slice().sort((a, b) => (b.prob * 0.65 + b.fill * 0.35) - (a.prob * 0.65 + a.fill * 0.35));
+      const candScores = (isPart2 ? allScores.slice(0, 3) : allScores).slice().sort((a, b) => (b.prob * 0.96 + b.fill * 0.04) - (a.prob * 0.96 + a.fill * 0.04));
       rawScores[q] = candScores;
     }
 
@@ -18609,7 +19735,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     }
     allCombs.sort((a, b) => a - b);
     const nC = allCombs.length;
-    const p55 = allCombs[Math.floor(nC * 0.55)] || 0;
+    const p55 = nC ? allCombs[Math.floor(nC * 0.55)] : 0;
     let bestJump = 0.04;
     let sheetThr = Math.max(0.14, p55 + 0.10);
     const lsGap = 6;
@@ -18623,17 +19749,20 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     sheetThr = Math.max(0.11, Math.min(0.32, sheetThr));
 
     for (let q = 1; q <= 200; q++) {
-      const isPart2 = q >= 7 && q <= 31;
       const candScores = rawScores[q];
       const best = candScores[0];
       const second = candScores[1];
       const secondFill = second ? second.fill : 0;
       const secondProb = second ? second.prob : 0;
 
-      if (best.prob >= 0.45 || best.fill >= sheetThr * 0.82 || best.fill >= 0.16 || (best.fill >= 0.12 && (best.fill - secondFill) >= 0.08)) {
+      if (best.prob >= 0.35 || best.fill >= Math.max(0.18, sheetThr * 0.85) || (best.fill >= 0.14 && (best.fill - secondFill) >= 0.09)) {
         answers[q] = best.letter;
-        const isDoubleMark = second && ((secondProb >= 0.60 && (best.prob - secondProb) < 0.22) || (secondFill >= 0.32 && (best.fill - secondFill) < 0.09));
-        const isFaintMark = best.prob < 0.42 && best.fill < 0.16;
+        const isDoubleMark = second && (
+          secondProb >= 0.35 ||
+          (best.prob < 0.72 && secondProb >= 0.20) ||
+          ((best.prob - secondProb) < 0.25 && secondFill >= 0.28)
+        );
+        const isFaintMark = best.prob < 0.45 && best.fill < 0.18;
         if (isDoubleMark || isFaintMark) {
           uncertain[q] = true;
         }
