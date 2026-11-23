@@ -18512,6 +18512,36 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     return 1 / (1 + Math.exp(-clamped));
   }
 
+  // OMR_MARK_MLP v8.5 — independent physical-mark presence detector (14→20→10→1)
+  // Competition-free: does NOT use comb-otherBest or slashVsPeer — each bubble scored independently
+  const OMR_MARK_MLP_V85 = {
+    W1: [[0.01887,-0.62183,-0.10723,0.139,0.0,-0.08985,-0.08716,2e-05,-0.09611,-0.22589,-0.4917,-0.18641,-0.01169,0.16213,0.08872,0.00128,0.10442,-0.16491,0.23018,0.02693],[0.03071,0.28803,-0.23556,0.319,0.0,-0.21566,-0.241,1e-05,0.02836,-0.49704,0.29169,-0.40159,-0.17665,0.41105,0.25022,0.00159,0.23351,-0.36345,0.77893,0.07941],[0.02608,-0.93621,0.04262,0.08218,-0.0,-0.09931,-0.09719,2e-05,-0.35462,0.05432,-0.6797,0.32941,-0.10227,0.13995,0.09227,0.00019,0.12858,0.05386,0.33123,0.01798],[0.03186,-0.47563,0.06351,0.1178,-0.0,-0.17906,-0.19854,-0.0,-0.24096,0.09415,-0.38371,0.59887,-0.35907,0.21211,0.14283,-0.00025,0.21702,0.0757,0.58599,0.03087],[0.02794,1.15573,0.12405,-0.21671,0.0,-0.27308,-0.30826,-0.0,0.76315,0.08909,0.34947,0.22907,-0.24963,-0.28144,-0.25603,-0.0019,-0.285,0.21037,-0.89933,-0.09469],[0.01701,-0.04699,0.24463,0.11109,0.0,-0.3641,-0.38096,-0.0,-0.42102,0.37665,0.50977,0.73052,0.19157,0.28017,0.25102,-0.00371,0.27665,0.36601,0.73103,0.04936],[-0.00081,-0.08871,-0.08138,0.10154,0.0,-0.15404,-0.16631,-0.0,-0.02583,-0.14645,-0.0177,0.16973,-0.05815,0.13422,0.10116,1e-05,0.12346,-0.11456,0.3229,0.0275],[0.00374,-0.02832,0.11857,-0.13314,-0.0,0.19563,0.21395,-0.0,-0.01807,0.22125,-0.11362,-0.10713,0.22308,-0.17868,-0.12397,0.0002,-0.13094,0.17214,-0.43229,-0.03254],[0.02654,-0.15491,-0.04053,0.11926,-0.0,-0.17218,-0.20091,0.0,-0.05189,-0.11049,-0.12573,0.06929,-0.10991,0.09399,0.09387,0.00038,0.10725,-0.07581,0.28522,0.0256],[0.17435,0.1917,0.0748,0.21747,0.00063,0.29935,0.33309,-0.00105,0.01922,-0.19233,0.10808,-0.66137,0.40695,0.34972,0.21981,0.00184,0.25203,0.1153,0.34517,0.05825],[0.0771,0.16184,0.0562,0.08893,-0.0,-0.04045,-0.05988,0.00014,-0.15374,0.12867,0.33389,-0.2244,-1.07559,0.03496,0.02887,-0.00758,0.09591,0.00107,0.06326,0.04527],[0.03499,0.50147,-0.11877,0.10897,-0.0,0.11832,0.12812,-0.0,0.45411,-0.26544,0.00781,-0.7204,0.47888,0.0967,0.01519,0.00218,-0.02559,-0.19041,-0.04094,0.01688],[0.00307,-0.2045,0.03225,-0.04577,-0.0,0.07751,0.08186,0.0,0.07221,0.08489,-0.31922,-0.12496,-0.2353,-0.07588,-0.10528,-0.00154,-0.15466,0.04519,-0.46862,-0.0222],[0.005,0.01405,-0.20734,0.20881,0.0,-0.21479,-0.23868,-0.0,0.23066,-0.39873,-0.18002,-0.16987,-0.5988,0.25235,0.14629,-0.00058,0.12129,-0.27811,0.25202,0.04963]],
+    b1: [0.54138,-0.20102,0.52924,0.02126,-0.12635,0.41308,0.46071,-0.09642,-0.11357,0.64189,-0.04851,-0.12062,0.48596,-0.03656,-0.03544,0.10811,-0.10511,0.53697,0.0049,0.0111],
+    W2: [[0.33383,-0.0,-0.0,-0.0,-0.0,0.13124,0.0,0.23711,0.2925,0.08791],[-1.06585,-0.0,0.0,0.0,-0.0,-0.6965,-0.0,0.63753,0.89878,0.38411],[0.59132,0.0,-0.0,-0.0,-0.0,0.27757,-0.0,0.00786,0.02523,-0.02199],[-0.19663,-0.0,-0.0,1e-05,0.0,-0.1574,-0.0,0.43362,0.27253,0.15094],[0.002,0.0,-0.0,0.0,-0.0,0.0,-0.0,5e-05,-0.0,0.0],[0.51553,-0.0,-0.0,-0.0,-0.0,0.32547,0.0,-0.12348,-0.18758,-0.09835],[0.54465,-0.0,-0.0,-0.0,0.0,0.37129,-0.0,-0.11274,-0.23074,-0.10836],[-7e-05,-0.0,0.0,0.0,0.0,0.0,-0.0,0.0,0.0,-0.0],[-0.64802,0.0,-0.0,-0.0,-0.0,-0.43956,-0.0,0.38833,0.5609,0.24724],[0.74597,-0.0,0.0,0.0,-0.0,0.42505,0.0,-0.1918,-0.2769,-0.13927],[-0.72086,0.0,0.0,-0.0,0.0,-0.50419,0.0,0.47287,0.63632,0.30224],[0.92026,-0.0,0.0,-0.0,0.0,0.64336,-0.0,-0.57186,-0.81581,-0.36277],[0.91554,0.0,0.0,-0.0,0.0,0.68111,0.0,-0.45693,-0.69353,-0.31334],[-0.28382,-0.0,0.0,0.0,0.0,-0.23239,-0.0,0.4587,0.42078,0.18783],[-0.262,-0.0,-0.0,-0.0,0.0,-0.16403,-0.0,0.22039,0.29036,0.12661],[0.03452,0.0,-0.0,-0.0,0.0,0.01717,0.0,0.03879,0.02631,0.00944],[-0.31133,-0.0,-0.0,-0.0,-0.0,-0.17592,-0.0,0.24068,0.31195,0.13437],[0.71559,0.0,0.0,-0.0,0.0,0.37402,-0.0,-0.03143,-0.11762,-0.05683],[-0.93646,0.0,-0.0,0.0,-0.0,-0.60682,-0.0,0.70074,0.92064,0.42501],[-0.05086,-0.0,-0.0,-0.0,-0.0,-0.03949,0.0,0.07934,0.0993,0.03587]],
+    b2: [0.47945,-0.09455,-0.17387,-0.13956,-0.2082,0.62279,-0.13051,0.06469,0.36301,0.23059],
+    W3: [-2.01285,0.0,0.0,-0.0,0.00042,-1.38551,0.0,1.22367,1.76416,0.7813],
+    b3: -0.41303
+  };
+
+  function evalOmrMarkMlpV85(feat14) {
+    const h1 = new Float64Array(20);
+    for (let j = 0; j < 20; j++) {
+      let z1 = OMR_MARK_MLP_V85.b1[j];
+      for (let i = 0; i < 14; i++) z1 += feat14[i] * OMR_MARK_MLP_V85.W1[i][j];
+      h1[j] = z1 > 0 ? z1 : 0;
+    }
+    let z3 = OMR_MARK_MLP_V85.b3;
+    for (let k = 0; k < 10; k++) {
+      let z2 = OMR_MARK_MLP_V85.b2[k];
+      for (let j = 0; j < 20; j++) {
+        if (h1[j] > 0) z2 += h1[j] * OMR_MARK_MLP_V85.W2[j][k];
+      }
+      if (z2 > 0) z3 += z2 * OMR_MARK_MLP_V85.W3[k];
+    }
+    const clamped = Math.max(-20, Math.min(20, z3));
+    return 1 / (1 + Math.exp(-clamped));
+  }
+
   function medianOfSortedBuf(buf, len) {
     if (len <= 0) return 255;
     const sub = buf.subarray(0, len);
@@ -19540,6 +19570,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const letters = ['A', 'B', 'C', 'D'];
     const answers = {};
     const uncertain = {};
+    const doubleMarked = {};
     const rawScores = {};
 
     const relDrop = (vals) => {
@@ -19672,6 +19703,9 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       const candLimit = isPart2 ? 3 : 4;
       let rowMaxComb = comb[0];
       for (let j = 1; j < candLimit; j++) if (comb[j] > rowMaxComb) rowMaxComb = comb[j];
+      const combRatioDenom = Math.max(0.18, rowMaxComb);
+      const combSorted4 = comb.slice().sort((a, b) => a - b);
+      const secondLowestComb = combSorted4[1];
       const darkThr = Math.max(0.24, 0.55 * rowMaxComb);
       const darkCands = [];
       for (let j = 0; j < candLimit; j++) if (comb[j] >= darkThr) darkCands.push(j);
@@ -19716,10 +19750,19 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           slashBal[k],
           slashVsPeer
         ]);
+        const markProb = evalOmrMarkMlpV85([
+          fWann[k], fPw[k], fDisk[k], fLet[k], fOblit[k], fStd[k],
+          redM[k], blueM[k], comb[k], fillSolid[k],
+          comb[k] / combRatioDenom, comb[k] - secondLowestComb,
+          slashPair[k], slashBal[k]
+        ]);
         return {
           letter: letters[k],
           fill: comb[k],
-          prob: mlpProb
+          prob: mlpProb,
+          markProb: markProb,
+          slashPair: slashPair[k],
+          slashBal: slashBal[k]
         };
       });
 
@@ -19769,9 +19812,33 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       } else {
         answers[q] = '';
       }
+
+      // OMR_MARK_MLP v8.5: independent physical-mark detection → doubleMarked
+      // Primary: markProb >= 0.55. Secondary (slash-assisted): needs a primary mark
+      // present AND strong slash signature (verified 0 FP on 2,752 clean rows).
+      const hasPrimaryMark = candScores.some((c) => c.markProb >= 0.55);
+      const marked = candScores.filter((c) =>
+        c.markProb >= 0.55 ||
+        (hasPrimaryMark && c.markProb >= 0.18 && c.slashPair >= 0.18 && c.slashBal >= 0.19 && c.fill >= 0.10)
+      );
+      if (marked.length >= 2) {
+        const opt1 = marked[0], opt2 = marked[1];
+        const isXout = (opt2.slashBal >= 0.18 && (opt2.slashBal - opt1.slashBal) >= 0.08) ||
+          (opt2.slashPair >= 0.18 && (opt2.slashPair - opt1.slashPair) >= 0.07) ||
+          (opt1.slashBal >= 0.26 && (opt1.slashBal - opt2.slashBal) >= 0.14) ||
+          (opt2.slashBal >= 0.20 && opt2.fill < 0.30);
+        doubleMarked[q] = {
+          recommended: best.letter,
+          candidates: [opt1.letter, opt2.letter],
+          allMarked: marked.map((c) => c.letter),
+          kind: isXout ? 'crossed-out' : 'double-fill',
+          probs: marked.map((c) => c.markProb)
+        };
+        uncertain[q] = true;
+      }
     }
 
-    return { warpedCanvas, answers, uncertain, rawScores, subblockShifts, snappedCorners };
+    return { warpedCanvas, answers, uncertain, doubleMarked, rawScores, subblockShifts, snappedCorners };
   }
 
   // --------------------------------------------------------------------------
@@ -19779,7 +19846,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   // --------------------------------------------------------------------------
   let omrState = {
     testCode: 'T01',
-    filterMode: 'all', // 'all' | 'uncertain' | 'blank'
+    filterMode: 'all', // 'all' | 'uncertain' | 'blank' | 'double'
     showWarped: false,
     srcImg: null,
     srcCanvas: null,
@@ -19788,6 +19855,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     draggingCorner: null,
     answers: {},
     uncertain: {},
+    doubleMarked: {},
     gradedOnce: false,
     handoffElapsedSec: 0,
     stream: null
@@ -20078,12 +20146,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const testOpts = getTestSelectOptions();
     const filledCount = Object.values(omrState.answers).filter(Boolean).length;
     const uncCount = Object.keys(omrState.uncertain).filter((k) => omrState.uncertain[k]).length;
+    const dblCount = Object.keys(omrState.doubleMarked).filter((k) => omrState.doubleMarked[k]).length;
     const qsList = [];
     for (let q = 1; q <= 200; q++) {
       const a = omrState.answers[q] || '';
       const u = !!omrState.uncertain[q];
+      const d = !!omrState.doubleMarked[q];
       if (omrState.filterMode === 'uncertain' && !u) continue;
       if (omrState.filterMode === 'blank' && a) continue;
+      if (omrState.filterMode === 'double' && !d) continue;
       qsList.push(q);
     }
 
@@ -20167,7 +20238,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
               <div>
                 <strong style="font-size:14px;">Kết Quả Đọc Nhanh</strong>
-                <div style="font-size:12px;color:var(--ink-muted);">Đã nhận diện: <strong>${filledCount}/200</strong> · Nghi vấn tô mờ: <strong style="color:var(--warn);">${uncCount}</strong></div>
+                <div style="font-size:12px;color:var(--ink-muted);">Đã nhận diện: <strong>${filledCount}/200</strong> · Nghi vấn tô mờ: <strong style="color:var(--warn);">${uncCount}</strong>${dblCount ? ` · <strong style="color:#e11d48;">2 đáp án: ${dblCount}</strong>` : ''}</div>
               </div>
               <button class="btn btn-primary btn-sm" onclick="ETS.saveOmrResultAndOpenCert()">
                 ${ETS.icon('award')} Chốt & Xem Bảng Điểm
@@ -20177,6 +20248,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
             <div class="formula-filter-group" style="margin-bottom:10px;">
               <button class="formula-pill-btn ${omrState.filterMode === 'all' ? 'active' : ''}" onclick="ETS.setOmrFilter('all')">Tất cả (200)</button>
               <button class="formula-pill-btn ${omrState.filterMode === 'uncertain' ? 'active' : ''}" onclick="ETS.setOmrFilter('uncertain')">Nghi vấn (${uncCount})</button>
+              ${dblCount ? `<button class="formula-pill-btn ${omrState.filterMode === 'double' ? 'active' : ''}" onclick="ETS.setOmrFilter('double')" style="${omrState.filterMode === 'double' ? '' : 'border-color:#e11d48;color:#e11d48;'}">2 đáp án (${dblCount})</button>` : ''}
               <button class="formula-pill-btn ${omrState.filterMode === 'blank' ? 'active' : ''}" onclick="ETS.setOmrFilter('blank')">Chưa tô (${200 - filledCount})</button>
             </div>
 
@@ -20184,7 +20256,33 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
               ${qsList.map((q) => {
                 const picked = omrState.answers[q] || '';
                 const isUnc = !!omrState.uncertain[q];
+                const dbl = omrState.doubleMarked[q];
                 const opts = (q >= 7 && q <= 31) ? ['A', 'B', 'C'] : ['A', 'B', 'C', 'D'];
+                if (dbl) {
+                  const kindLabel = dbl.kind === 'crossed-out' ? '✕ Gạch bỏ' : '◉ Tô đúp';
+                  const kindBg = dbl.kind === 'crossed-out' ? 'var(--warn-soft, #fef3c7)' : 'var(--danger-soft, #fce7f3)';
+                  const kindColor = dbl.kind === 'crossed-out' ? 'var(--warn-dark, #92400e)' : 'var(--danger-dark, #9d174d)';
+                  const kindBorder = dbl.kind === 'crossed-out' ? 'var(--warn, #fbbf24)' : 'var(--danger-light, #f9a8d4)';
+                  return `<div class="omr-q-row double-marked" style="grid-column:1/-1;display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:10px 12px;border:1px solid ${kindBorder};border-radius:10px;background:var(--surface-2);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                      <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                        <span style="font-weight:700;font-size:14px;min-width:28px;">${q}</span>
+                        <span style="font-size:10px;padding:2px 7px;background:${kindBg};color:${kindColor};border:1px solid ${kindBorder};border-radius:6px;white-space:nowrap;">${kindLabel}</span>
+                        <span style="font-size:11.5px;color:var(--ink-muted);white-space:nowrap;">AI gợi ý: <strong style="color:var(--ink);">${dbl.recommended}</strong></span>
+                      </div>
+                      <div class="omr-q-bubbles" style="gap:4px;">
+                        ${opts.map((lt) => `<button class="omr-q-pip ${picked === lt ? 'active' : ''}${dbl.allMarked.indexOf(lt) !== -1 ? ' dbl-ring' : ''}" onclick="ETS.toggleOmrAnswer(${q}, '${lt}')" style="width:26px;height:26px;font-size:11px;">${lt}</button>`).join('')}
+                      </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                      ${dbl.candidates.map((lt) => {
+                        const isRec = lt === dbl.recommended;
+                        const isActive = picked === lt;
+                        return `<button class="btn btn-sm ${isActive ? 'btn-primary' : ''}" style="display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 10px;font-size:12.5px;border-color:${isRec ? 'var(--warn, #f59e0b)' : '#e11d48'};border-radius:8px;${isActive ? '' : 'background:var(--surface-1);'}" onclick="ETS.selectOmrAnswer(${q}, '${lt}')">Chọn ${lt}${isRec ? ' <span style=&quot;font-size:10px;opacity:0.7;&quot;>· Gợi ý</span>' : ''}</button>`;
+                      }).join('')}
+                    </div>
+                  </div>`;
+                }
                 return `<div class="omr-q-row ${isUnc ? 'uncertain' : ''}">
                   <span>${q}</span>
                   <div class="omr-q-bubbles">
@@ -20359,16 +20457,27 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       for (let q = 1; q <= 200; q++) {
         const picked = omrState.answers[q];
         const pickedIdx = picked ? ['A', 'B', 'C', 'D'].indexOf(picked) : -1;
+        const dbl = omrState.doubleMarked[q];
         const colIdx = Math.floor((q - 1) / 25);
         const bandIdx = Math.floor(((q - 1) % 25) / 5);
         const shf = (omrState.subblockShifts && omrState.subblockShifts[colIdx] && omrState.subblockShifts[colIdx][bandIdx]) || { dx: 0, dy: 0 };
         for (let k = 0; k < 4; k++) {
           const p = getBubbleCenter(q, k);
+          const letter = ['A', 'B', 'C', 'D'][k];
           const isPicked = (k === pickedIdx);
+          const isDblMark = dbl && dbl.allMarked.indexOf(letter) !== -1;
+          if (isDblMark && !isPicked) {
+            // 2nd marked bubble — rose ring
+            ctx.strokeStyle = '#e11d48';
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.arc(p.x + shf.dx, p.y + shf.dy, 7.8, 0, Math.PI * 2);
+            ctx.stroke();
+          }
           ctx.strokeStyle = isPicked
-            ? (omrState.uncertain[q] ? '#f59e0b' : '#10b981')
-            : 'rgba(56, 189, 248, 0.65)';
-          ctx.lineWidth = isPicked ? 2.4 : 1.1;
+            ? (dbl ? '#f59e0b' : (omrState.uncertain[q] ? '#f59e0b' : '#10b981'))
+            : (isDblMark ? '#e11d48' : 'rgba(56, 189, 248, 0.65)');
+          ctx.lineWidth = isPicked ? 2.4 : (isDblMark ? 1.6 : 1.1);
           ctx.beginPath();
           ctx.arc(p.x + shf.dx, p.y + shf.dy, isPicked ? 7.2 : 6.2, 0, Math.PI * 2);
           ctx.stroke();
@@ -20433,6 +20542,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     omrState.warpedCanvas = res.warpedCanvas;
     omrState.answers = res.answers;
     omrState.uncertain = res.uncertain;
+    omrState.doubleMarked = res.doubleMarked || {};
     omrState.subblockShifts = res.subblockShifts;
     omrState.gradedOnce = true;
     res.detectedMode = (omrState.corners && omrState.corners.mode) || 'custom';
@@ -20508,6 +20618,17 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const s = captureOmrScroll();
     omrState.answers[q] = (omrState.answers[q] === letter) ? '' : letter;
     delete omrState.uncertain[q];
+    delete omrState.doubleMarked[q];
+    renderOmrScannerView({ preserveScroll: s });
+  }
+
+  function selectOmrAnswer(q, letter) {
+    const s = captureOmrScroll();
+    omrState.answers[q] = letter;
+    delete omrState.uncertain[q];
+    delete omrState.doubleMarked[q];
+    const dblRemain = Object.keys(omrState.doubleMarked).filter((k) => omrState.doubleMarked[k]).length;
+    if (omrState.filterMode === 'double' && dblRemain === 0) omrState.filterMode = 'all';
     renderOmrScannerView({ preserveScroll: s });
   }
 
@@ -20537,12 +20658,17 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     }
 
     if (!forceFinalize && uncList.length > 0 && ETS.openModal) {
+      const dblList = Object.keys(omrState.doubleMarked).filter((k) => omrState.doubleMarked[k]).map((k) => Number(k)).sort((a, b) => a - b);
       const previewQs = uncList.slice(0, 12).map((q) => `Câu ${q}`).join(', ') + (uncList.length > 12 ? ` và ${uncList.length - 12} câu khác` : '');
+      const dblNote = dblList.length > 0 ? ` (trong đó có <strong>${dblList.length} câu</strong> tô 2 đáp án)` : '';
+      const dblBtn = dblList.length > 0
+        ? `<button class="btn btn-sm" style="border-color:#e11d48;color:#e11d48;" onclick="ETS.closeModal(); ETS.setOmrFilter('double')">Rà Soát 2 Đáp Án (${dblList.length})</button>\n          `
+        : '';
       ETS.openModal({
         title: `Còn ${uncList.length} câu nghi vấn tô mờ / tô đúp`,
-        bodyHtml: `<p style="font-size:13.5px;color:var(--ink);margin:0 0 8px;">Phát hiện <strong>${uncList.length} câu</strong> cần bạn kiểm tra lại trước khi chốt điểm (<strong>${ETS.esc(previewQs)}</strong>).</p>
+        bodyHtml: `<p style="font-size:13.5px;color:var(--ink);margin:0 0 8px;">Phát hiện <strong>${uncList.length} câu</strong> cần bạn kiểm tra lại trước khi chốt điểm${dblNote} (<strong>${ETS.esc(previewQs)}</strong>).</p>
           <p style="font-size:12.5px;color:var(--ink-muted);margin:0;">Chọn <strong>Rà Soát Nghi Vấn</strong> để lọc riêng các câu này và bấm chọn đáp án đúng, hoặc bấm <strong>Vẫn Chốt Bảng Điểm</strong> nếu muốn giữ nguyên kết quả hiện tại.</p>`,
-        footHtml: `<button class="btn btn-sm" onclick="ETS.closeModal(); ETS.setOmrFilter('uncertain')">Rà Soát Nghi Vấn (${uncList.length})</button>
+        footHtml: `${dblBtn}<button class="btn btn-sm" onclick="ETS.closeModal(); ETS.setOmrFilter('uncertain')">Rà Soát Nghi Vấn (${uncList.length})</button>
           <button class="btn btn-primary btn-sm" onclick="ETS.closeModal(); ETS.saveOmrResultAndOpenCert(true)">Vẫn Chốt Bảng Điểm</button>`
       });
       return;
@@ -20645,6 +20771,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   ETS.setOmrFilter = setOmrFilter;
   ETS.toggleOmrWarpedPreview = toggleOmrWarpedPreview;
   ETS.toggleOmrAnswer = toggleOmrAnswer;
+  ETS.selectOmrAnswer = selectOmrAnswer;
   ETS.handleOmrFileUpload = handleOmrFileUpload;
   ETS.toggleOmrCamera = toggleOmrCamera;
   ETS.captureOmrCameraFrame = captureOmrCameraFrame;
