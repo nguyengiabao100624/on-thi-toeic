@@ -4127,8 +4127,22 @@ body.theme-dark .ets-booklet-page-img {
 .syn-vi-row { font-size: 0.9rem; color: var(--ink); line-height: 1.45; }
 .syn-ex-box { padding: 9px 11px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
 .syn-ex-en { display: flex; align-items: flex-start; gap: 8px; font-size: 0.87rem; line-height: 1.5; color: var(--ink); }
+.syn-ex-ans-line { display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; line-height: 1.5; color: var(--ink); margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
 .syn-ex-vi { margin-top: 5px; padding-left: 34px; font-size: 0.83rem; color: var(--ink-vi); line-height: 1.45; }
-.syn-hl { background: var(--highlight); color: inherit; font-weight: 800; padding: 0 4px; border-radius: 4px; }
+.syn-hl { background: var(--highlight); color: inherit; font-weight: 800; padding: 1px 5px; border-radius: 5px; }
+.syn-hl-ans { background: var(--success-soft); color: var(--success); font-weight: 800; padding: 1px 5px; border-radius: 5px; }
+.syn-quiz-vi-hint { margin-top: 7px; padding: 6px 10px; border-radius: 7px; background: var(--ink-vi-bg); border-left: 3px solid var(--ink-vi); color: var(--ink-vi); font-size: 0.85rem; line-height: 1.48; }
+.syn-sub-compare {
+  margin: 10px 0 8px; padding: 11px 13px; border-radius: 11px;
+  background: var(--success-soft); border: 1.5px solid rgba(22, 163, 74, 0.32);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.syn-sub-eq { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 0.9rem; }
+.syn-ans-pill {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  background: var(--success); color: #fff; font-weight: 800; font-size: 0.86rem;
+}
+.syn-sub-sent { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 0.92rem; line-height: 1.52; color: var(--ink); font-weight: 600; }
 
 .syn-trap-box {
   display: flex; align-items: flex-start; gap: 8px; padding: 8px 11px; border-radius: 10px;
@@ -5702,6 +5716,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         activeTab: 'matrix',
         fcDir: 'SRC_TO_ANS',
         fcAutoSpeak: true,
+        quizAutoSpeak: true,
         quizScope: 'FILTERED',
         filter: { set: 'ALL', day: 'ALL', topic: 'ALL', part: 'ALL', tier: 'ALL', status: 'ALL', search: '' },
       },
@@ -11237,6 +11252,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     if (!s.activeTab) s.activeTab = 'matrix';
     if (!s.fcDir) s.fcDir = 'SRC_TO_ANS';
     if (typeof s.fcAutoSpeak !== 'boolean') s.fcAutoSpeak = true;
+    if (typeof s.quizAutoSpeak !== 'boolean') s.quizAutoSpeak = true;
     if (!s.quizScope) s.quizScope = 'FILTERED';
     return s;
   }
@@ -11287,20 +11303,27 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     });
   }
 
-  function highlightWordInSentence(sentence, word) {
+  function highlightWordInSentence(sentence, word, markCls) {
     const safe = esc(sentence || '');
     const w = String(word || '').trim();
     if (!w) return safe;
-    const escapedW = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`\\b(${escapedW})\\b`, 'gi');
-    return safe.replace(re, '<mark class="syn-hl">$1</mark>');
+    const cls = markCls || 'syn-hl';
+    const safeW = esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const reWord = new RegExp(`\\b(${safeW})\\b`, 'gi');
+    if (reWord.test(safe)) {
+      return safe.replace(new RegExp(`\\b(${safeW})\\b`, 'gi'), `<mark class="${cls}">$1</mark>`);
+    }
+    // Safe fallback for phrases with punctuation/hyphens
+    const reLoose = new RegExp(`(${safeW})`, 'gi');
+    return safe.replace(reLoose, `<mark class="${cls}">$1</mark>`);
   }
 
   function speakSynText(text, rate) {
     const clean = String(text || '').replace(/\s*\/\s*/g, ', ').trim();
     if (!clean) return;
-    if (typeof speakEnglish === 'function') {
-      speakEnglish(clean, rate);
+    const fn = (window.ETS && typeof window.ETS.speakEnglish === 'function') ? window.ETS.speakEnglish : speakEnglish;
+    if (typeof fn === 'function') {
+      fn(clean, rate);
     }
   }
 
@@ -11474,9 +11497,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
         <div class="syn-ex-box">
           <div class="syn-ex-en">
-            <button type="button" class="syn-speak-mini" onclick="ETS.speakSynText('${escJsStr(it.ex_en)}')" title="Nghe câu ví dụ">${icon('volume')}</button>
-            <span>${highlightWordInSentence(it.ex_en, it.src_word)}</span>
+            <button type="button" class="syn-speak-mini" onclick="ETS.speakSynText('${escJsStr(it.ex_en)}')" title="Nghe câu gốc">${icon('volume')}</button>
+            <span>${highlightWordInSentence(it.ex_en, it.hl || it.src_word)}</span>
           </div>
+          ${it.set === 'paraphrase_iig' && it.ex_ans_en ? `
+            <div class="syn-ex-ans-line">
+              <button type="button" class="syn-speak-mini" onclick="ETS.speakSynText('${escJsStr(it.ex_ans_en)}')" title="Nghe câu Paraphrase ETS">${icon('volume')}</button>
+              <span><strong style="color:var(--success);">ETS đổi thành:</strong> ${highlightWordInSentence(it.ex_ans_en, it.primary_target, 'syn-hl-ans')}</span>
+            </div>
+          ` : ''}
           <div class="syn-ex-vi vi-only">${esc(it.ex_vi)}</div>
         </div>
 
@@ -11678,7 +11707,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
               <div class="syn-fc-prompt-lbl">${isForward ? 'TRONG ĐỀ / AUDIO ETS — ĐOÁN CỤM ĐỒNG NGHĨA PARAPHRASE' : 'ĐÁP ÁN PARAPHRASE ETS — ĐOÁN TỪ / CỤM GỐC TRONG ĐỀ'}</div>
               <div class="syn-fc-main-text">${esc(isForward ? cur.src : (cur.targets || []).join('  ·  '))}</div>
               ${isForward ? `<div class="syn-fc-ipa"><span>${esc(cur.pos)}</span> · ${esc(cur.ipa)}</div>` : ''}
-              <div class="syn-fc-ctx-preview">${isForward ? highlightWordInSentence(cur.ex_en, cur.src_word) : `Gợi ý nghĩa: ${esc(cur.vi)}`}</div>
+              <div class="syn-fc-ctx-preview">${isForward ? highlightWordInSentence(cur.ex_en, cur.hl || cur.src_word) : `Gợi ý nghĩa: ${esc(cur.vi)}`}</div>
               <div class="syn-fc-flip-cta">Bấm vào thẻ hoặc nhấn <kbd>Space</kbd> để xem đáp án &amp; bẫy IIG</div>
             </div>
           ` : `
@@ -11695,8 +11724,14 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
               <div class="syn-ex-box" style="text-align:left;width:100%;max-width:680px;margin:10px auto 0;">
                 <div class="syn-ex-en">
                   <button type="button" class="syn-speak-mini" onclick="ETS.speakSynText('${escJsStr(cur.ex_en)}')">${icon('volume')}</button>
-                  <span>${highlightWordInSentence(cur.ex_en, cur.src_word)}</span>
+                  <span>${highlightWordInSentence(cur.ex_en, cur.hl || cur.src_word)}</span>
                 </div>
+                ${cur.ex_ans_en ? `
+                  <div class="syn-ex-ans-line">
+                    <button type="button" class="syn-speak-mini" onclick="ETS.speakSynText('${escJsStr(cur.ex_ans_en)}')">${icon('volume')}</button>
+                    <span><strong style="color:var(--success);">Câu đồng nghĩa:</strong> ${highlightWordInSentence(cur.ex_ans_en, cur.primary_target, 'syn-hl-ans')}</span>
+                  </div>
+                ` : ''}
                 <div class="syn-ex-vi vi-only">${esc(cur.ex_vi)}</div>
               </div>
               <div class="syn-trap-box" style="text-align:left;width:100%;max-width:680px;margin:10px auto 0;">
@@ -11731,15 +11766,21 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   // ===================== MODE 3: AUTHENTIC IIG QUIZ =====================
   function buildQuizQuestion(it, allItems) {
+    const hl = it.hl || it.src_word || it.src;
     // Authentic ETS 2025-2026 Part 7 "Closest in Meaning" Question!
     if (it.set === 'ets_real' && it.quiz && it.quiz.options) {
+      const ansEn = (it.quiz.options[it.quiz.ans] && it.quiz.options[it.quiz.ans].en) || it.primary_target;
       return {
         item: it,
+        hl,
         isRealEts: true,
-        stem: it.quiz.stem_en,
+        ctxLabel: 'CÂU TRÍCH TỪ ĐỀ THI THẬT ETS PART 7',
+        stem: `Từ tô vàng "${hl}" trong câu đề thi thật ETS trên gần nghĩa nhất với từ nào?`,
         ref: it.quiz.ref || (it.sources && it.sources[0]) || 'ETS Official',
         options: it.quiz.options,
         ans: it.quiz.ans,
+        ansEn,
+        correctSentence: it.ex_ans_en || it.ex_en,
       };
     }
     // Smart same-set, same-sub distractor sampling for Paraphrase / Synonyms / Collocations
@@ -11773,17 +11814,26 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       if (c.isCorrect) ans = lt;
     });
 
-    const stem = it.set === 'paraphrase_iig'
-      ? `Trong bài nghe/đọc ETS, cụm "${it.src}" thường được Paraphrase thành đáp án nào?`
-      : `Từ / cụm "${it.src}" đồng nghĩa gần nhất với phương án nào trong bối cảnh TOEIC?`;
+    const isPara = it.set === 'paraphrase_iig';
+    const baseNote = (!isPara && hl.toLowerCase() !== String(it.src || '').toLowerCase()) ? ` (${it.src})` : '';
+    const ctxLabel = isPara
+      ? 'CÂU TRONG BÀI NGHE / ĐOẠN VĂN GỐC (AUDIO / TEXT)'
+      : 'CÂU NGỮ CẢNH THI TOEIC IIG';
+    const stem = isPara
+      ? `Cụm tô vàng "${hl}" trong câu trên thường được ETS viết lại (Paraphrase) thành đáp án nào?`
+      : `Từ / cụm tô vàng "${hl}"${baseNote} trong câu trên đồng nghĩa gần nhất với đáp án nào?`;
 
     return {
       item: it,
+      hl,
       isRealEts: false,
+      ctxLabel,
       stem,
       ref: (it.sources || []).slice(0, 2).join(' · '),
       options,
       ans,
+      ansEn: it.primary_target,
+      correctSentence: it.ex_ans_en || it.ex_en,
     };
   }
 
@@ -11815,13 +11865,14 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       pool = getFilteredItems();
     }
     if (!pool.length) pool = allItems;
-    const count = scope === 'ETS_51' ? Math.min(20, pool.length) : Math.min(20, pool.length);
+    const count = Math.min(20, pool.length);
     const qs = shuffleArr(pool).slice(0, count).map((it) => buildQuizQuestion(it, allItems));
     quizSes = {
       scope,
       questions: qs,
       idx: 0,
       picked: null,
+      showHint: false,
       right: 0,
       streak: 0,
       maxStreak: 0,
@@ -11836,7 +11887,21 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   function startSynQuiz(scope) {
     const syn = ensureSynState();
     syn.activeTab = 'quiz';
+    stopAllAudio();
     initQuizSession(scope || syn.quizScope || 'FILTERED');
+    renderSynonymsHub();
+  }
+
+  function toggleSynQuizAutoSpeak() {
+    const syn = ensureSynState();
+    syn.quizAutoSpeak = !syn.quizAutoSpeak;
+    saveState();
+    renderSynonymsHub();
+  }
+
+  function toggleSynQuizHint() {
+    if (!quizSes || quizSes.done) return;
+    quizSes.showHint = !quizSes.showHint;
     renderSynonymsHub();
   }
 
@@ -11865,12 +11930,19 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     }
     saveState();
     renderSynonymsHub();
+    // Auto-pronounce the correct answer & full correct sentence immediately on pick!
+    if (syn.quizAutoSpeak !== false && q.correctSentence) {
+      const speakPayload = q.ansEn ? `${q.ansEn}. ${q.correctSentence}` : q.correctSentence;
+      speakSynText(speakPayload);
+    }
   }
 
   function nextSynQuizQ() {
     if (!quizSes || quizSes.done) return;
+    stopAllAudio();
     quizSes.idx++;
     quizSes.picked = null;
+    quizSes.showHint = false;
     quizSes.qSec = 0;
     if (quizSes.idx >= quizSes.questions.length) {
       quizSes.done = true;
@@ -11893,6 +11965,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           <button type="button" class="btn btn-xs ${s.scope === 'WRONG' ? 'btn-danger' : ''}" ${wrongTotal ? '' : 'disabled'} onclick="ETS.startSynQuiz('WRONG')">${icon('alert')} Ôn câu từng sai (${wrongTotal})</button>
         </div>
         <div class="syn-mode-bar-grp">
+          <button type="button" class="btn btn-xs ${syn.quizAutoSpeak !== false ? 'btn-soft' : ''}" onclick="ETS.toggleSynQuizAutoSpeak()" title="Tự động phát âm đáp án và câu đúng ngay khi chọn">${icon('volume')} Tự đọc câu đúng: ${syn.quizAutoSpeak !== false ? 'BẬT' : 'TẮT'}</button>
           <span class="badge badge-success">Đúng: ${s.right}/${s.idx + (s.picked ? 1 : 0)}</span>
           <span class="badge badge-warn">${icon('flame')} Streak: ${s.streak}</span>
           <button type="button" class="btn btn-xs" onclick="ETS.startSynQuiz('${escJsStr(s.scope)}')">${icon('refresh')} Đề mới</button>
@@ -11932,24 +12005,28 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     const q = s.questions[s.idx];
     const it = q.item;
     const pct = Math.round((s.idx / Math.max(1, s.questions.length)) * 100);
+    const showViCtx = !!s.picked || !!s.showHint;
 
     return `
       ${toolbar}
       <div class="syn-quiz-wrap">
         <div class="syn-fc-prog-row">
-          <span>Câu <strong>${s.idx + 1} / ${s.questions.length}</strong> · <span class="badge ${q.isRealEts ? 'badge-danger' : 'badge-primary'}">${esc(q.ref)}</span></span>
+          <span>Câu <strong>${s.idx + 1} / ${s.questions.length}</strong> · <span class="badge ${q.isRealEts ? 'badge-danger' : 'badge-primary'}">${esc(q.ref)}</span> · <span class="syn-topic-pill">${esc(it.topic)}</span></span>
           <span class="syn-quiz-clock ${s.qSec > 12 ? 'is-slow' : ''}" id="synQuizClock">${s.qSec}s</span>
         </div>
         <div class="progress-track" style="margin-bottom:14px;"><div class="progress-fill" style="width:${pct}%;background:var(--primary);"></div></div>
 
         <div class="card syn-quiz-card">
           <div class="syn-quiz-ctx">
-            <div class="syn-eq-lbl" style="display:flex;justify-content:space-between;align-items:center;">
-              <span>${q.isRealEts ? 'TRÍCH ĐOẠN ĐỀ THI THẬT ETS PART 7' : 'NGỮ CẢNH THI TOEIC IIG'}</span>
-              <button type="button" class="btn btn-xs" onclick="ETS.speakSynText('${escJsStr(it.ex_en)}')">${icon('volume')} Nghe câu</button>
+            <div class="syn-eq-lbl" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span>${esc(q.ctxLabel)}</span>
+              <div style="display:inline-flex;gap:6px;align-items:center;">
+                ${!s.picked ? `<button type="button" class="btn btn-xs ${s.showHint ? 'btn-soft' : ''}" onclick="ETS.toggleSynQuizHint()">${icon('lightbulb')} ${s.showHint ? 'Ẩn gợi ý dịch' : 'Gợi ý nghĩa câu'}</button>` : ''}
+                <button type="button" class="btn btn-xs" onclick="ETS.speakSynText('${escJsStr(it.ex_en)}')">${icon('volume')} Nghe câu gốc</button>
+              </div>
             </div>
-            <div class="syn-quiz-quote">${highlightWordInSentence(it.ex_en, it.src_word)}</div>
-            ${s.picked ? `<div class="syn-ex-vi vi-only" style="margin-top:6px;">${esc(it.ex_vi)}</div>` : ''}
+            <div class="syn-quiz-quote">${highlightWordInSentence(it.ex_en, q.hl)}</div>
+            ${showViCtx ? `<div class="syn-quiz-vi-hint">${esc(it.ex_vi)}</div>` : ''}
           </div>
 
           <div class="syn-quiz-stem">${esc(q.stem)}</div>
@@ -11980,9 +12057,24 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           ${s.picked ? `
             <div class="syn-quiz-explain">
               <div class="syn-quiz-verdict ${s.picked === q.ans ? 'ok' : 'bad'}">
-                ${s.picked === q.ans ? `${icon('check-circle')} Chính xác!` : `${icon('x-circle')} Chưa chính xác — Đáp án đúng là (${q.ans}) ${esc(q.options[q.ans].en)}`}
+                ${s.picked === q.ans ? `${icon('check-circle')} Chính xác!` : `${icon('x-circle')} Chưa chính xác — Đáp án đúng là (${q.ans}) ${esc(q.ansEn)}`}
               </div>
-              <div style="margin:8px 0 6px;font-size:0.9rem;">
+
+              <div class="syn-sub-compare">
+                <div class="syn-sub-eq">
+                  <span class="syn-eq-lbl" style="margin:0;">CÔNG THỨC ĐỔI TRONG CÂU:</span>
+                  <mark class="syn-hl">${esc(q.hl)}</mark>
+                  <span style="color:var(--primary);font-weight:900;">→</span>
+                  <span class="syn-ans-pill">${esc(q.ansEn)}</span>
+                  <span style="color:var(--ink-muted);font-size:0.84rem;">(${esc(it.vi)})</span>
+                </div>
+                <div class="syn-sub-sent">
+                  <button type="button" class="btn btn-xs btn-success" onclick="ETS.speakSynText('${escJsStr(q.correctSentence)}')">${icon('volume')} Nghe câu đúng</button>
+                  <span>${highlightWordInSentence(q.correctSentence, q.ansEn, 'syn-hl-ans')}</span>
+                </div>
+              </div>
+
+              <div style="margin:10px 0 8px;font-size:0.9rem;">
                 <strong>Chuỗi đồng nghĩa chuẩn ETS:</strong>
                 <span class="syn-chips" style="display:inline-flex;vertical-align:middle;margin-left:6px;">
                   ${(it.targets || []).map((t, i) => `<button type="button" class="syn-chip ${i === 0 ? 'is-primary' : ''}" onclick="ETS.speakSynText('${escJsStr(t)}')">${icon('volume')} ${esc(t)}</button>`).join('')}
@@ -11999,7 +12091,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
               </div>
             </div>
           ` : `
-            <div class="syn-kbd-hint" style="margin-top:10px;text-align:right;">Mẹo: Nhấn phím <kbd>A</kbd><kbd>B</kbd><kbd>C</kbd><kbd>D</kbd> hoặc <kbd>1</kbd>–<kbd>4</kbd> để chọn nhanh</div>
+            <div class="syn-kbd-hint" style="margin-top:10px;text-align:right;">Mẹo: Nhìn cụm <mark class="syn-hl">tô vàng</mark> trong câu → chọn phương án đồng nghĩa · Phím <kbd>A</kbd><kbd>B</kbd><kbd>C</kbd><kbd>D</kbd> hoặc <kbd>1</kbd>–<kbd>4</kbd></div>
           `}
         </div>
       </div>
@@ -12610,6 +12702,8 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     toggleSynFcAutoSpeak,
     retrySynFcMissed,
     startSynQuiz,
+    toggleSynQuizAutoSpeak,
+    toggleSynQuizHint,
     pickSynQuizOpt,
     nextSynQuizQ,
     restartSynMatch,
