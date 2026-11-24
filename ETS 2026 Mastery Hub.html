@@ -4014,6 +4014,274 @@ body.theme-dark .ets-booklet-page-img {
   .series-tab-btn { justify-content: center; padding: 7px 8px; font-size: 0.8rem; }
 }
 
+/* ============================================================================
+   SYNONYMS & PARAPHRASE IIG STUDIO (255 ULTRA-FOCUSED ITEMS · 5 MODES)
+   ============================================================================ */
+@media (max-width: 1220px) and (min-width: 961px) {
+  .nav-tab { padding: 7px 10px; font-size: 0.85rem; gap: 5px; }
+}
+.syn-page { display: flex; flex-direction: column; gap: 14px; }
+.syn-header { margin-bottom: 0; align-items: flex-start; gap: 12px; }
+.syn-subtitle { margin: 5px 0 0; font-size: 0.86rem; color: var(--ink-muted); line-height: 1.5; max-width: 780px; }
+.syn-head-actions { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+
+.syn-sources-drawer { padding: 14px 16px; border-left: 4px solid var(--primary); }
+.syn-sources-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.syn-source-item { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+
+.syn-days-card { padding: 12px 14px; }
+.syn-days-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.syn-day-pills { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.syn-day-pill {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--border);
+  background: var(--surface-2); color: var(--ink); font-size: 0.82rem; transition: var(--transition);
+}
+.syn-day-pill strong { font-weight: 800; font-size: 0.84rem; }
+.syn-day-pill span { font-size: 0.74rem; color: var(--ink-subtle); font-weight: 700; }
+.syn-day-pill:hover { border-color: var(--primary); transform: translateY(-1px); }
+.syn-day-pill.active { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,0.22); }
+.syn-day-pill.active span { color: rgba(255,255,255,0.88); }
+.syn-day-pill.is-complete:not(.active) { border-color: var(--success); background: var(--success-soft); }
+
+.syn-tabs-bar {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px;
+  padding: 6px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.syn-mode-tab {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 10px 12px; border-radius: 10px; border: 1.5px solid transparent;
+  background: transparent; color: var(--ink-muted); font-size: 0.88rem; font-weight: 800;
+  transition: var(--transition); white-space: nowrap;
+}
+.syn-mode-tab:hover { background: var(--surface-2); color: var(--ink); }
+.syn-mode-tab.active { background: var(--primary); color: #fff; box-shadow: 0 6px 16px -6px rgba(37,99,235,0.45); }
+
+.syn-filter-card { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.syn-set-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.syn-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.syn-search-wrap { position: relative; flex: 1 1 250px; min-width: 200px; }
+.syn-search-ico { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-subtle); pointer-events: none; display: inline-flex; }
+.syn-search-input {
+  width: 100%; padding: 8px 12px 8px 34px; border-radius: 9px; border: 1.5px solid var(--border-strong);
+  background: var(--surface-2); color: var(--ink); font-size: 0.87rem; font-weight: 500; transition: var(--transition);
+}
+.syn-search-input:focus { outline: none; border-color: var(--primary); background: var(--surface); box-shadow: 0 0 0 3px var(--primary-soft); }
+.syn-select {
+  padding: 8px 10px; border-radius: 9px; border: 1.5px solid var(--border-strong);
+  background: var(--surface-2); color: var(--ink); font-size: 0.83rem; font-weight: 700; cursor: pointer; max-width: 100%;
+}
+.syn-select:focus { outline: none; border-color: var(--primary); }
+
+/* Mode 1: Matrix Cards */
+.syn-matrix-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 14px; }
+.syn-card { padding: 15px 16px; display: flex; flex-direction: column; gap: 10px; transition: border-color 0.16s ease, box-shadow 0.16s ease; }
+.syn-card:hover { border-color: var(--primary); box-shadow: var(--shadow-md); }
+.syn-card.is-ets-real { border-top: 3px solid var(--danger); }
+.syn-card.is-mastered { border-left: 4px solid var(--success); }
+.syn-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.syn-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.syn-sub-tag { font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--surface-3); color: var(--ink-muted); }
+.syn-part-tag { font-size: 0.71rem; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: var(--primary-soft); color: var(--primary); }
+.syn-tier-s { font-size: 0.71rem; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); }
+.syn-tier-a { font-size: 0.71rem; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.syn-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.syn-ico-btn {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--ink-subtle); display: inline-flex; align-items: center; justify-content: center; transition: var(--transition);
+}
+.syn-ico-btn:hover { border-color: var(--primary); color: var(--primary); }
+.syn-ico-btn.is-star { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.syn-ico-btn.is-done { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+
+.syn-eq-box {
+  display: grid; grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1.35fr); gap: 8px; align-items: center;
+  padding: 11px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border);
+}
+.syn-eq-lbl { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; color: var(--ink-subtle); text-transform: uppercase; margin-bottom: 5px; }
+.syn-src-row { display: flex; align-items: center; gap: 6px; }
+.syn-src-word { font-size: 1.04rem; font-weight: 900; color: var(--ink); line-height: 1.3; word-break: break-word; }
+.syn-src-sub { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 0.78rem; color: var(--ink-subtle); }
+.syn-pos { font-weight: 800; font-size: 0.72rem; padding: 1px 6px; border-radius: 5px; background: var(--surface-3); color: var(--ink-muted); }
+.syn-ipa { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; }
+.syn-arrow-col { display: flex; align-items: center; justify-content: center; color: var(--primary); }
+.syn-speak-mini {
+  width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--primary); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transition: var(--transition);
+}
+.syn-speak-mini:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+.syn-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.syn-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px;
+  border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--ink);
+  font-size: 0.83rem; font-weight: 700; transition: var(--transition);
+}
+.syn-chip:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-1px); }
+.syn-chip.is-primary { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 800; }
+.syn-chip.is-primary:hover { background: var(--primary-hover); color: #fff; }
+.syn-chip-lg { padding: 8px 14px; font-size: 0.96rem; }
+.syn-chip svg, .syn-speak-mini svg { width: 14px; height: 14px; }
+
+.syn-vi-row { font-size: 0.9rem; color: var(--ink); line-height: 1.45; }
+.syn-ex-box { padding: 9px 11px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.syn-ex-en { display: flex; align-items: flex-start; gap: 8px; font-size: 0.87rem; line-height: 1.5; color: var(--ink); }
+.syn-ex-vi { margin-top: 5px; padding-left: 34px; font-size: 0.83rem; color: var(--ink-vi); line-height: 1.45; }
+.syn-hl { background: var(--highlight); color: inherit; font-weight: 800; padding: 0 4px; border-radius: 4px; }
+
+.syn-trap-box {
+  display: flex; align-items: flex-start; gap: 8px; padding: 8px 11px; border-radius: 10px;
+  background: var(--warn-soft); border: 1px solid rgba(217,119,6,0.28); color: var(--ink); font-size: 0.82rem; line-height: 1.48;
+}
+.syn-trap-ico { color: var(--warn); flex-shrink: 0; margin-top: 1px; display: inline-flex; }
+.syn-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding-top: 6px; border-top: 1px solid var(--border); }
+.syn-topic-pill { font-size: 0.74rem; font-weight: 800; color: var(--ink-muted); }
+.syn-src-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.syn-src-pill { font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--surface-3); color: var(--ink-subtle); }
+
+/* Mode Bar & Shared Summary */
+.syn-mode-bar {
+  padding: 10px 14px; margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+.syn-mode-bar-grp { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.syn-empty { padding: 36px 20px; text-align: center; }
+.syn-summary-card { padding: 28px 22px; text-align: center; max-width: 700px; margin: 0 auto; }
+.syn-summary-ico {
+  width: 56px; height: 56px; border-radius: 16px; margin: 0 auto 12px;
+  background: var(--primary-soft); color: var(--primary); display: grid; place-items: center;
+}
+.syn-summary-ico svg { width: 28px; height: 28px; }
+.syn-summary-sub { color: var(--ink-muted); font-size: 0.92rem; margin: 6px 0 10px; }
+.syn-quiz-score-big { font-size: 2.2rem; font-weight: 900; color: var(--primary); margin: 4px 0; }
+.syn-quiz-score-big span { font-size: 1.1rem; color: var(--ink-muted); font-weight: 700; }
+.syn-missed-list { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); text-align: left; }
+.syn-missed-row { padding: 5px 0; border-bottom: 1px dashed var(--border); font-size: 0.86rem; }
+.syn-missed-row:last-child { border-bottom: none; }
+.syn-missed-ans { color: var(--primary); font-weight: 800; }
+
+/* Mode 2: 2-Way Flashcard */
+.syn-fc-wrap { max-width: 780px; margin: 0 auto; }
+.syn-fc-prog-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; font-size: 0.86rem; color: var(--ink-muted); }
+.syn-kbd-hint { font-size: 0.78rem; color: var(--ink-subtle); }
+.syn-kbd-hint kbd { padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border-strong); background: var(--surface-2); font-size: 0.74rem; font-weight: 800; }
+.syn-fc-card { padding: 18px 22px 24px; min-height: 310px; display: flex; flex-direction: column; cursor: pointer; transition: border-color 0.16s ease, box-shadow 0.16s ease; }
+.syn-fc-card:hover { border-color: var(--primary); box-shadow: var(--shadow-md); }
+.syn-fc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+.syn-fc-face { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 10px 6px; }
+.syn-fc-prompt-lbl { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.05em; color: var(--ink-subtle); text-transform: uppercase; margin-bottom: 10px; }
+.syn-fc-main-text { font-size: clamp(1.35rem, 2.8vw, 2rem); font-weight: 900; color: var(--ink); line-height: 1.25; }
+.syn-fc-ipa { margin-top: 6px; font-size: 0.9rem; color: var(--ink-subtle); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.syn-fc-ctx-preview { margin-top: 16px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: 0.9rem; color: var(--ink-muted); max-width: 640px; line-height: 1.5; }
+.syn-fc-flip-cta { margin-top: 18px; font-size: 0.82rem; font-weight: 700; color: var(--primary); }
+.syn-fc-vi-big { font-size: 1.05rem; font-weight: 800; color: var(--ink); }
+.syn-srs-bar { display: flex; justify-content: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.syn-srs-btn { flex: 1 1 180px; flex-direction: column; gap: 2px; padding: 10px 14px; }
+.syn-srs-btn span { font-size: 0.74rem; font-weight: 600; opacity: 0.85; }
+.syn-srs-btn.is-again { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+.syn-srs-btn.is-hard { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+.syn-srs-btn.is-good { border-color: var(--success); background: var(--success); color: #fff; }
+
+/* Mode 3: Authentic IIG Quiz */
+.syn-quiz-wrap { max-width: 820px; margin: 0 auto; }
+.syn-quiz-clock {
+  padding: 3px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border-strong);
+  font-weight: 800; font-size: 0.84rem; font-variant-numeric: tabular-nums;
+}
+.syn-quiz-clock.is-slow { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+.syn-quiz-card { padding: 20px 22px; }
+.syn-quiz-ctx { padding: 13px 15px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); margin-bottom: 14px; }
+.syn-quiz-quote { font-size: 1rem; line-height: 1.62; color: var(--ink); margin-top: 6px; font-weight: 500; }
+.syn-quiz-stem { font-size: 1.02rem; font-weight: 800; color: var(--ink); margin-bottom: 12px; }
+.syn-quiz-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.syn-quiz-opt {
+  display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-radius: 11px; text-align: left;
+  border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--ink); transition: var(--transition);
+}
+.syn-quiz-opt:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-soft); transform: translateY(-1px); }
+.syn-opt-letter {
+  width: 30px; height: 30px; border-radius: 8px; background: var(--surface-3); color: var(--ink);
+  font-weight: 900; font-size: 0.88rem; display: grid; place-items: center; flex-shrink: 0;
+}
+.syn-opt-body { flex: 1; min-width: 0; }
+.syn-opt-en { font-size: 0.94rem; font-weight: 800; }
+.syn-opt-vi { font-size: 0.8rem; color: var(--ink-vi); margin-top: 2px; }
+.syn-quiz-opt.is-correct { border-color: var(--success); background: var(--success-soft); }
+.syn-quiz-opt.is-correct .syn-opt-letter { background: var(--success); color: #fff; }
+.syn-quiz-opt.is-wrong { border-color: var(--danger); background: var(--danger-soft); }
+.syn-quiz-opt.is-wrong .syn-opt-letter { background: var(--danger); color: #fff; }
+.syn-quiz-opt.is-dim { opacity: 0.6; }
+.syn-opt-mark { flex-shrink: 0; display: inline-flex; }
+.syn-quiz-opt.is-correct .syn-opt-mark { color: var(--success); }
+.syn-quiz-opt.is-wrong .syn-opt-mark { color: var(--danger); }
+.syn-quiz-explain { margin-top: 16px; padding-top: 14px; border-top: 1.5px solid var(--border); }
+.syn-quiz-verdict { display: inline-flex; align-items: center; gap: 6px; font-weight: 900; font-size: 0.96rem; margin-bottom: 6px; }
+.syn-quiz-verdict.ok { color: var(--success); }
+.syn-quiz-verdict.bad { color: var(--danger); }
+
+/* Mode 4: Speed Paraphrase Matching */
+.syn-match-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; max-width: 960px; margin: 0 auto; }
+.syn-match-col { display: flex; flex-direction: column; gap: 9px; }
+.syn-match-col-head { font-size: 0.76rem; font-weight: 800; letter-spacing: 0.04em; color: var(--ink-subtle); padding: 0 4px; }
+.syn-match-tile {
+  width: 100%; min-height: 60px; padding: 11px 14px; border-radius: 12px; text-align: left;
+  border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--ink);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; transition: var(--transition);
+}
+.syn-match-tile:hover:not(:disabled) { border-color: var(--primary); background: var(--surface-2); transform: translateY(-1px); }
+.syn-match-tile.is-selected { border-color: var(--primary); background: var(--primary-soft); box-shadow: 0 0 0 2px var(--primary-soft); }
+.syn-match-tile.is-matched { border-color: var(--success); background: var(--success-soft); color: var(--success); opacity: 0.62; }
+.syn-match-tile.is-wrong { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+.syn-match-txt { font-size: 0.94rem; font-weight: 800; line-height: 1.3; }
+.syn-match-hint { font-size: 0.76rem; color: var(--ink-subtle); font-weight: 600; white-space: nowrap; }
+
+/* Mode 5: Cram Sheet & Hands-Free Table */
+.syn-cram-table-wrap { overflow-x: auto; }
+.syn-cram-table { width: 100%; border-collapse: collapse; min-width: 680px; }
+.syn-cram-table th {
+  padding: 10px 12px; background: var(--surface-2); border-bottom: 1.5px solid var(--border-strong);
+  font-size: 0.78rem; font-weight: 800; color: var(--ink-subtle); text-align: left; text-transform: uppercase;
+}
+.syn-cram-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.syn-cram-num { font-weight: 800; color: var(--ink-subtle); font-size: 0.82rem; }
+.syn-cram-row { transition: background 0.14s ease; }
+.syn-cram-row:hover { background: var(--surface-2); }
+.syn-cram-row.is-playing { background: var(--primary-soft) !important; box-shadow: inset 4px 0 0 var(--primary); }
+.syn-cram-ans-inner { display: flex; flex-wrap: wrap; gap: 5px; }
+.syn-cram-pill { font-size: 0.81rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--surface-3); color: var(--ink); }
+.syn-cram-pill.is-main { background: var(--primary-soft); color: var(--primary); font-weight: 800; }
+.syn-cram-mask-hint { display: none; font-size: 0.78rem; font-weight: 700; color: var(--primary); padding: 4px 10px; border-radius: 7px; background: var(--primary-soft); }
+.syn-cram-row.is-masked { cursor: pointer; }
+.syn-cram-row.is-masked:not(.is-revealed) .syn-cram-ans-inner { display: none; }
+.syn-cram-row.is-masked:not(.is-revealed) .syn-cram-mask-hint { display: inline-block; }
+
+/* Mobile & Tablet Responsive Polish */
+@media screen and (min-width: 1320px) {
+  .portal-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+.syn-compact-bar {
+  padding: 9px 14px; display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap; background: var(--surface); border-left: 4px solid var(--primary);
+}
+@media screen and (max-width: 960px) {
+  .syn-tabs-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .syn-mode-tab:last-child { grid-column: 1 / -1; }
+  .syn-day-pills { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .syn-matrix-grid { grid-template-columns: 1fr; }
+}
+@media screen and (max-width: 760px) {
+  .syn-eq-box { grid-template-columns: 1fr; gap: 8px; }
+  .syn-arrow-col { justify-content: flex-start; transform: rotate(90deg); width: 24px; }
+  .syn-quiz-opts { grid-template-columns: 1fr; }
+  .syn-match-board { grid-template-columns: 1fr; gap: 12px; }
+  .syn-filter-row { flex-direction: column; align-items: stretch; }
+  .syn-search-wrap { flex: none; width: 100%; min-width: 0; }
+  .syn-fc-card { padding: 14px; min-height: 260px; }
+  .syn-quiz-card { padding: 14px; }
+  .syn-kbd-hint { display: none; }
+}
+
   </style>
 </head>
 <body>
@@ -4025,6 +4293,7 @@ body.theme-dark .ets-booklet-page-img {
       <button class="nav-tab" data-route="home" onclick="ETS.navigate('home')"><span class="nav-ico" data-nav-icon="home"></span> <span class="lbl">Trang chủ</span></button>
       <button class="nav-tab" data-route="sprint" onclick="ETS.navigate('sprint')"><span class="nav-ico" data-nav-icon="zap"></span> <span class="lbl">Cấp Tốc 30/11</span></button>
       <button class="nav-tab" data-route="voca-hub" onclick="ETS.navigate('voca-hub')"><span class="nav-ico" data-nav-icon="voca"></span> <span class="lbl">VOCA &amp; Cụm Từ</span></button>
+      <button class="nav-tab" data-route="synonyms" onclick="ETS.navigate('synonyms')"><span class="nav-ico" data-nav-icon="swap"></span> <span class="lbl">Đồng Nghĩa IIG</span></button>
       <button class="nav-tab" data-route="test-hub" onclick="ETS.navigate('test-hub')"><span class="nav-ico" data-nav-icon="tests"></span> <span class="lbl">Kho Đề (20 Tests)</span></button>
       <button class="nav-tab" data-route="formulas" onclick="ETS.navigate('formulas')"><span class="nav-ico" data-nav-icon="formulas"></span> <span class="lbl" id="navFormulasLbl">Công Thức &amp; Bài Tập</span></button>
       <button class="nav-tab" data-route="notebook" onclick="ETS.navigate('notebook')"><span class="nav-ico" data-nav-icon="bookmark"></span> <span class="lbl">Sổ Lỗi Sai</span></button>
@@ -4046,6 +4315,7 @@ body.theme-dark .ets-booklet-page-img {
   <!-- Offline & CDN Data Bundles -->
   <script src="web_data/voca_data.js"></script>
   <script src="web_data/dict_extra.js"></script>
+  <script src="web_data/synonyms_iig_data.js"></script>
   <script src="web_data/test01_full.js"></script>
   <script src="web_data/tests_02_10_full.js"></script>
   <script src="web_data/tests_meta.js"></script>
@@ -5251,6 +5521,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     formulas: rawData.formulas || [],
     formulasRich: rawData.formulasRich || { parsed: [] },
     dictExtra: window.ETS_DICT_EXTRA || rawData.dictExtra || {},
+    synonymsIig: rawData.synonymsIig || { items: [], sourcesMeta: [], setsMeta: [], daysMeta: [], topics: [] },
   };
 
   const _loadingTestPromises = {};
@@ -5421,6 +5692,19 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         quizDone: {},      // { "tid_idx": true }
         drillAnswers: {},  // { "F00_Q1": "B" }
       },
+      synonyms: {
+        statuses: {},
+        bookmarks: {},
+        srs: {},
+        quizWrong: {},
+        quizBestStreak: 0,
+        matchBestSec: null,
+        activeTab: 'matrix',
+        fcDir: 'SRC_TO_ANS',
+        fcAutoSpeak: true,
+        quizScope: 'FILTERED',
+        filter: { set: 'ALL', day: 'ALL', topic: 'ALL', part: 'ALL', tier: 'ALL', status: 'ALL', search: '' },
+      },
       lastActivity: { type: 'voca', label: 'Tiếp tục học Từ vựng', payload: {} },
     };
   }
@@ -5476,6 +5760,18 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           ...def.formulas,
           ...(p.formulas || {}),
           drillAnswers: (p.formulas && p.formulas.drillAnswers) || {},
+        },
+        synonyms: {
+          ...def.synonyms,
+          ...(p.synonyms || {}),
+          statuses: (p.synonyms && p.synonyms.statuses) || {},
+          bookmarks: (p.synonyms && p.synonyms.bookmarks) || {},
+          srs: (p.synonyms && p.synonyms.srs) || {},
+          quizWrong: (p.synonyms && p.synonyms.quizWrong) || {},
+          filter: {
+            ...def.synonyms.filter,
+            ...((p.synonyms && p.synonyms.filter) || {}),
+          },
         },
       };
       if (!['light', 'sepia', 'dark'].includes(merged.theme)) merged.theme = 'light';
@@ -5578,7 +5874,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     if (r === 'voca-study') return 'voca-hub';
     if (r === 'sprint-drill') return 'sprint';
     if (r === 'test-practice' || r === 'test-exam' || r === 'test-result' || r === 'paper-live') return 'test-hub';
-    const allowed = ['home', 'sprint', 'voca-hub', 'test-hub', 'formulas', 'notebook', 'paper-exam', 'omr-scan'];
+    const allowed = ['home', 'sprint', 'voca-hub', 'synonyms', 'test-hub', 'formulas', 'notebook', 'paper-exam', 'omr-scan'];
     return allowed.includes(r) ? r : 'home';
   }
 
@@ -5721,6 +6017,27 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           ...((older.formulas && older.formulas.drillAnswers) || {}),
           ...((newer.formulas && newer.formulas.drillAnswers) || {})
         }
+      },
+      synonyms: {
+        ...def.synonyms,
+        ...(older.synonyms || {}),
+        ...(newer.synonyms || {}),
+        statuses: { ...((older.synonyms && older.synonyms.statuses) || {}), ...((newer.synonyms && newer.synonyms.statuses) || {}) },
+        bookmarks: { ...((older.synonyms && older.synonyms.bookmarks) || {}), ...((newer.synonyms && newer.synonyms.bookmarks) || {}) },
+        srs: { ...((older.synonyms && older.synonyms.srs) || {}), ...((newer.synonyms && newer.synonyms.srs) || {}) },
+        quizWrong: { ...((older.synonyms && older.synonyms.quizWrong) || {}), ...((newer.synonyms && newer.synonyms.quizWrong) || {}) },
+        quizBestStreak: Math.max(Number(older.synonyms && older.synonyms.quizBestStreak) || 0, Number(newer.synonyms && newer.synonyms.quizBestStreak) || 0),
+        matchBestSec: (() => {
+          const a = older.synonyms && older.synonyms.matchBestSec;
+          const b = newer.synonyms && newer.synonyms.matchBestSec;
+          if (a && b) return Math.min(Number(a), Number(b));
+          return a || b || null;
+        })(),
+        filter: {
+          ...def.synonyms.filter,
+          ...((older.synonyms && older.synonyms.filter) || {}),
+          ...((newer.synonyms && newer.synonyms.filter) || {}),
+        }
       }
     };
   }
@@ -5815,13 +6132,13 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       if (localFlushTimer) flushStateToLocalStorageSync();
       return;
     }
-    if (document.visibilityState === 'visible' && profileHydrated && !profileDirty && inFlightCloudPushes === 0 && !['test-exam', 'paper-live', 'voca-study', 'test-practice', 'sprint-drill'].includes(state.route)) {
+    if (document.visibilityState === 'visible' && profileHydrated && !profileDirty && inFlightCloudPushes === 0 && !['test-exam', 'paper-live', 'voca-study', 'test-practice', 'sprint-drill', 'synonyms'].includes(state.route)) {
       loadProfileFromServer(activeProfileId, { renderCurrent: true });
     }
   });
 
   setInterval(() => {
-    if (document.visibilityState === 'visible' && profileHydrated && !profileDirty && inFlightCloudPushes === 0 && !['test-exam', 'paper-live', 'voca-study', 'test-practice', 'sprint-drill'].includes(state.route) && !document.getElementById('etsModal')) {
+    if (document.visibilityState === 'visible' && profileHydrated && !profileDirty && inFlightCloudPushes === 0 && !['test-exam', 'paper-live', 'voca-study', 'test-practice', 'sprint-drill', 'synonyms'].includes(state.route) && !document.getElementById('etsModal')) {
       loadProfileFromServer(activeProfileId, { renderCurrent: true });
     }
   }, 18000);
@@ -7567,6 +7884,9 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     if (prevRoute === 'omr-scan' && route !== 'omr-scan' && window.ETS.stopOmrCamera) {
       window.ETS.stopOmrCamera();
     }
+    if (prevRoute === 'synonyms' && route !== 'synonyms' && window.ETS.stopSynonymsRuntime) {
+      window.ETS.stopSynonymsRuntime();
+    }
     hideSelectionPopover();
     const tc = document.getElementById('toastContainer');
     if (tc && !opts._keepToast) tc.replaceChildren();
@@ -7792,6 +8112,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           <p style="margin:0 0 12px;font-size:0.9rem;opacity:0.94;line-height:1.52;">Luyện phản xạ Part 5 20s/câu, 60 cặp Paraphrase kinh điển Part 3–4–7, bẫy câu hỏi gián tiếp Part 2 và lộ trình 12 ngày chuẩn hóa theo đề ETS 2026 &amp; 2025.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-sm btn-hero-white" onclick="ETS.navigate('sprint')">${icon('zap')} Vào Ôn Cấp Tốc 30/11 ${icon('arrow-right')}</button>
+            <button class="btn btn-sm btn-hero-ghost" onclick="ETS.navigate('synonyms')">${icon('swap')} Học 255 Đồng Nghĩa IIG</button>
             <button class="btn btn-sm btn-hero-ghost" onclick="ETS.setTestSeries && ETS.setTestSeries('2025'); ETS.navigate('test-hub');">${icon('tests')} Mở Bộ Đề ETS 2025 (10 Tests)</button>
           </div>
         </div>
@@ -7886,6 +8207,15 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
             <p class="portal-desc">1.600+ từ &amp; cụm từ lưu từ đề, phiên âm IPA đa từ, giọng đọc Oxford US/UK.</p>
           </div>
           <span class="badge badge-primary">Mở Kho Từ Vựng ${icon('arrow-right')}</span>
+        </div>
+
+        <div class="card portal-card" onclick="ETS.navigate('synonyms')">
+          <div>
+            <div class="portal-icon" style="background:var(--danger-soft);color:var(--danger);">${icon('swap')}</div>
+            <div class="portal-title">Đồng Nghĩa &amp; Paraphrase IIG</div>
+            <p class="portal-desc">255 mục siêu trọng tâm (51 câu ETS 2025–2026 thật + TSL 1.2 + Oxford/Hackers), 5 chế độ học cấp tốc.</p>
+          </div>
+          <span class="badge badge-danger">Học 255 Đồng Nghĩa ${icon('arrow-right')}</span>
         </div>
 
         <div class="card portal-card" onclick="ETS.navigate('test-hub')">
@@ -8471,7 +8801,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     document.addEventListener('dblclick', () => {
       setTimeout(showSelectionPopoverForCurrentSelection, 12);
     });
-    const allowed = ['home', 'sprint', 'voca-hub', 'test-hub', 'formulas', 'notebook', 'paper-exam', 'omr-scan'];
+    const allowed = ['home', 'sprint', 'voca-hub', 'synonyms', 'test-hub', 'formulas', 'notebook', 'paper-exam', 'omr-scan'];
     const startRoute = allowed.includes(state.route) ? state.route : 'home';
     navigate(startRoute);
 
@@ -8802,6 +9132,17 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           <div class="kpi-label">Đến Hạn Ôn SRS</div>
           <div class="kpi-val" style="color:var(--accent);">${dueSrs}</div>
           <div class="kpi-sub">${dueSrs > 0 ? '<a href="#" onclick="event.preventDefault();ETS.openVocaSetupModal(\'fc1\',{status:\'SRS_DUE\'})">Cấu hình ôn SRS →</a>' : 'Hôm nay đã gọn sạch!'}</div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border-left:4px solid var(--danger);">
+        <div style="font-size:0.88rem;line-height:1.45;">
+          <strong style="display:inline-flex;align-items:center;gap:6px;color:var(--ink);">${icon('swap')} Kho Đồng Nghĩa &amp; Paraphrase Chuẩn IIG (255 mục cấp tốc 5 ngày)</strong>
+          <div style="color:var(--ink-muted);font-size:0.81rem;margin-top:2px;">51 câu <em>closest in meaning</em> thật từ 20 đề ETS 2025–2026 + TSL 1.2 · Oxford · Cambridge · Hackers · Bẫy Part 1–7.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-xs btn-primary" onclick="ETS.navigate('synonyms')">${icon('swap')} Mở Kho Đồng Nghĩa IIG</button>
+          <button type="button" class="btn btn-xs" onclick="ETS.navigate('synonyms'); if(ETS.startSynQuiz) ETS.startSynQuiz('ETS_51');">${icon('quiz')} Luyện 51 Câu ETS Thật</button>
         </div>
       </div>
 
@@ -10812,6 +11153,1472 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     checkDictation, revealDictHint, nextDictStep, toggleDictHideVi, setupMatchBoard, clickMatchTile,
     toggleHandsFreeRun, stepHandsFree, setHandsFreePause, toggleAudioLoop, setQuizDir,
     renderVocaStudy, getLastMissedWords, getCurrentBatch,
+  });
+})(window.ETS);
+
+
+// ============================================================================
+// ETS 2026 MASTERY HUB — KHO ĐỒNG NGHĨA & PARAPHRASE CHUẨN IIG (255 MỤC)
+// 5 Chế độ học: Bản Đồ Tra Cứu · Flashcard 2 Chiều SRS · Trắc Nghiệm IIG
+//               Ghép Cặp Phản Xạ · Lướt Nhanh / Nghe Rảnh Tay & In A4
+// ============================================================================
+(function (ETS) {
+  const { DB, state, saveState, trackDailyProgress, esc, escJsStr, shuffleArr, toast, speakEnglish, stopAllAudio } = ETS;
+  const icon = (name, cls) => (ETS.icon ? ETS.icon(name, cls) : '');
+
+  const SET_LABELS = {
+    ets_real: { label: 'ETS Thật', cls: 'badge-danger' },
+    core_syn: { label: 'Đồng Nghĩa', cls: 'badge-primary' },
+    paraphrase_iig: { label: 'Paraphrase', cls: 'badge-accent' },
+    phrases_p56: { label: 'Cụm & Phrasal', cls: 'badge-warn' },
+  };
+  const SUB_LABELS = {
+    polysemy: 'Đa nghĩa Part 7',
+    verb: 'Động từ',
+    noun: 'Danh từ',
+    adj: 'Tính từ',
+    adv: 'Trạng từ',
+    direct: 'Audio → Đáp án',
+    general: 'Khái quát hóa',
+    transform: 'Đổi cấu trúc',
+    part1: 'Bẫy Tranh Part 1',
+    phrasal: 'Phrasal Verb',
+    colloc: 'Collocation / Giới từ',
+  };
+
+  // Ephemeral session states (isolated from persisted profile state)
+  let sourcesOpen = false;
+  let drillFiltersOpen = false;
+  let matrixLimit = 24;
+  let fcSes = null;
+  let quizSes = null;
+  let quizTimerHandle = null;
+  let matchSes = null;
+  let matchTimerHandle = null;
+  let cramState = { maskAns: false, revealed: {}, playing: false, idx: -1, rate: 1.0, timer: null };
+
+  function stopSynTimers(keepHandsFreeFlag) {
+    if (quizTimerHandle) { clearInterval(quizTimerHandle); quizTimerHandle = null; }
+    if (matchTimerHandle) { clearInterval(matchTimerHandle); matchTimerHandle = null; }
+    if (cramState.timer) { clearTimeout(cramState.timer); cramState.timer = null; }
+    if (!keepHandsFreeFlag) {
+      cramState.playing = false;
+      cramState.idx = -1;
+    }
+  }
+
+  function stopSynonymsRuntime() {
+    stopSynTimers(false);
+    stopAllAudio();
+  }
+
+  if (typeof ETS.registerTransientReset === 'function') {
+    ETS.registerTransientReset(() => {
+      stopSynTimers(false);
+      fcSes = null;
+      quizSes = null;
+      matchSes = null;
+      cramState.revealed = {};
+    });
+  }
+
+  function ensureSynState() {
+    if (!state.synonyms || typeof state.synonyms !== 'object') {
+      state.synonyms = {};
+    }
+    const s = state.synonyms;
+    if (!s.statuses || typeof s.statuses !== 'object') s.statuses = {};
+    if (!s.bookmarks || typeof s.bookmarks !== 'object') s.bookmarks = {};
+    if (!s.srs || typeof s.srs !== 'object') s.srs = {};
+    if (!s.quizWrong || typeof s.quizWrong !== 'object') s.quizWrong = {};
+    if (!s.filter || typeof s.filter !== 'object') {
+      s.filter = { set: 'ALL', day: 'ALL', topic: 'ALL', part: 'ALL', tier: 'ALL', status: 'ALL', search: '' };
+    }
+    if (!s.activeTab) s.activeTab = 'matrix';
+    if (!s.fcDir) s.fcDir = 'SRC_TO_ANS';
+    if (typeof s.fcAutoSpeak !== 'boolean') s.fcAutoSpeak = true;
+    if (!s.quizScope) s.quizScope = 'FILTERED';
+    return s;
+  }
+
+  function getPack() {
+    return (DB && DB.synonymsIig && Array.isArray(DB.synonymsIig.items))
+      ? DB.synonymsIig
+      : { items: [], sourcesMeta: [], setsMeta: [], daysMeta: [], topics: [] };
+  }
+
+  function getItemById(id) {
+    const items = getPack().items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].id === id) return items[i];
+    }
+    return null;
+  }
+
+  function getFilteredItems(override) {
+    const syn = ensureSynState();
+    const f = { ...syn.filter, ...(override || {}) };
+    const now = Date.now();
+    const q = String(f.search || '').trim().toLowerCase();
+    return getPack().items.filter((it) => {
+      if (f.set && f.set !== 'ALL' && it.set !== f.set) return false;
+      if (f.day && f.day !== 'ALL' && Number(it.day) !== Number(f.day)) return false;
+      if (f.topic && f.topic !== 'ALL' && it.topic !== f.topic) return false;
+      if (f.part && f.part !== 'ALL' && !(Array.isArray(it.parts) && it.parts.includes(f.part))) return false;
+      if (f.tier && f.tier !== 'ALL' && it.tier !== f.tier) return false;
+      const st = syn.statuses[it.id] || 'unseen';
+      if (f.status === 'UNSEEN' && st !== 'unseen') return false;
+      if (f.status === 'LEARNING' && st !== 'learning') return false;
+      if (f.status === 'MASTERED' && st !== 'mastered') return false;
+      if (f.status === 'BOOKMARKED' && !syn.bookmarks[it.id]) return false;
+      if (f.status === 'SRS_DUE') {
+        const sr = syn.srs[it.id];
+        if (!sr || sr.dueAt > now) return false;
+      }
+      if (f.status === 'WRONG' && !(syn.quizWrong[it.id] > 0)) return false;
+      if (q) {
+        const hay = [
+          it.src, it.src_word, (it.targets || []).join(' '), it.vi, it.trap,
+          it.topic, (it.sources || []).join(' '), it.ex_en
+        ].join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function highlightWordInSentence(sentence, word) {
+    const safe = esc(sentence || '');
+    const w = String(word || '').trim();
+    if (!w) return safe;
+    const escapedW = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`\\b(${escapedW})\\b`, 'gi');
+    return safe.replace(re, '<mark class="syn-hl">$1</mark>');
+  }
+
+  function speakSynText(text, rate) {
+    const clean = String(text || '').replace(/\s*\/\s*/g, ', ').trim();
+    if (!clean) return;
+    if (typeof speakEnglish === 'function') {
+      speakEnglish(clean, rate);
+    }
+  }
+
+  // ===================== PROGRESS & SRS MUTATIONS =====================
+  function markSynSrs(id, rating) {
+    const syn = ensureSynState();
+    const now = Date.now();
+    const prev = syn.srs[id] || { reps: 0, intervalDays: 0, dueAt: now };
+    if (rating === 'again') {
+      syn.statuses[id] = 'learning';
+      syn.srs[id] = { reps: 0, intervalDays: 0, dueAt: now + 10 * 60 * 1000 };
+    } else if (rating === 'hard') {
+      syn.statuses[id] = 'learning';
+      syn.srs[id] = { reps: Math.max(1, prev.reps), intervalDays: 1, dueAt: now + 24 * 3600 * 1000 };
+    } else {
+      const nextReps = (prev.reps || 0) + 1;
+      const daysSeq = [3, 7, 14, 30];
+      const nextDays = daysSeq[Math.min(daysSeq.length - 1, nextReps - 1)];
+      syn.statuses[id] = 'mastered';
+      syn.srs[id] = { reps: nextReps, intervalDays: nextDays, dueAt: now + nextDays * 24 * 3600 * 1000 };
+      if (typeof trackDailyProgress === 'function') trackDailyProgress('voca', 1);
+    }
+    saveState();
+  }
+
+  function toggleSynBookmark(id) {
+    const syn = ensureSynState();
+    if (syn.bookmarks[id]) delete syn.bookmarks[id];
+    else syn.bookmarks[id] = true;
+    saveState();
+    renderSynonymsHub({ keepFocus: true });
+  }
+
+  function toggleSynMastered(id) {
+    const syn = ensureSynState();
+    if (syn.statuses[id] === 'mastered') {
+      syn.statuses[id] = 'learning';
+      saveState();
+    } else {
+      markSynSrs(id, 'good');
+    }
+    renderSynonymsHub({ keepFocus: true });
+  }
+
+  // ===================== FILTERS & TAB SWITCHING =====================
+  function setSynFilter(key, val) {
+    const syn = ensureSynState();
+    syn.filter[key] = val;
+    matrixLimit = 24;
+    if (key !== 'search') {
+      // Reset active ephemeral sessions when scope changes cleanly
+      if (syn.activeTab === 'flashcard') fcSes = null;
+      if (syn.activeTab === 'match') { stopSynTimers(false); matchSes = null; }
+      if (syn.activeTab === 'quiz' && syn.quizScope === 'FILTERED') { stopSynTimers(false); quizSes = null; }
+    }
+    saveState();
+    if (key === 'search') {
+      const body = document.getElementById('synWorkspaceBody');
+      const badge = document.getElementById('synFilteredBadge');
+      const filtered = getFilteredItems();
+      if (badge) badge.textContent = `${filtered.length} / ${getPack().items.length} mục khớp`;
+      if (body) {
+        if (syn.activeTab === 'matrix') body.innerHTML = renderMatrixBody(filtered);
+        else if (syn.activeTab === 'cram') body.innerHTML = renderCramBody(filtered);
+        else renderSynonymsHub({ keepFocus: true });
+      }
+      return;
+    }
+    renderSynonymsHub();
+  }
+
+  function resetSynFilters() {
+    const syn = ensureSynState();
+    syn.filter = { set: 'ALL', day: 'ALL', topic: 'ALL', part: 'ALL', tier: 'ALL', status: 'ALL', search: '' };
+    matrixLimit = 24;
+    fcSes = null;
+    if (syn.quizScope === 'FILTERED') quizSes = null;
+    matchSes = null;
+    saveState();
+    renderSynonymsHub();
+  }
+
+  function setSynTab(tab) {
+    const syn = ensureSynState();
+    stopSynTimers(false);
+    stopAllAudio();
+    syn.activeTab = tab;
+    saveState();
+    if (tab === 'flashcard' && !fcSes) initFlashcardSession();
+    if (tab === 'quiz' && !quizSes) initQuizSession();
+    if (tab === 'match' && !matchSes) initMatchSession();
+    renderSynonymsHub();
+  }
+
+  function toggleSynSources() {
+    sourcesOpen = !sourcesOpen;
+    renderSynonymsHub();
+  }
+
+  function toggleSynDrillFilters() {
+    drillFiltersOpen = !drillFiltersOpen;
+    renderSynonymsHub();
+  }
+
+  function cleanTrapText(txt) {
+    return String(txt || '').replace(/^Bẫy:\s*/i, '');
+  }
+
+  function loadMoreSynMatrix() {
+    matrixLimit += 36;
+    const body = document.getElementById('synWorkspaceBody');
+    if (body) body.innerHTML = renderMatrixBody(getFilteredItems());
+  }
+
+  // ===================== MODE 1: VISUAL SYNONYM MATRIX =====================
+  function renderMatrixCard(it, syn) {
+    const st = syn.statuses[it.id] || 'unseen';
+    const isStar = !!syn.bookmarks[it.id];
+    const isDone = st === 'mastered';
+    const setInfo = SET_LABELS[it.set] || { label: it.set, cls: '' };
+    const subTxt = SUB_LABELS[it.sub] || it.sub;
+    const wrongCnt = syn.quizWrong[it.id] || 0;
+
+    return `
+      <article class="card syn-card ${isDone ? 'is-mastered' : ''} ${it.set === 'ets_real' ? 'is-ets-real' : ''}">
+        <div class="syn-card-top">
+          <div class="syn-card-meta">
+            <span class="badge ${setInfo.cls}">${esc(setInfo.label)}</span>
+            <span class="badge">Ngày ${it.day}</span>
+            <span class="syn-sub-tag">${esc(subTxt)}</span>
+            ${(it.parts || []).map((p) => `<span class="syn-part-tag">${esc(p)}</span>`).join('')}
+            ${it.tier === 'S' ? '<span class="syn-tier-s">Siêu hot IIG</span>' : '<span class="syn-tier-a">800–990+</span>'}
+            ${wrongCnt > 0 ? `<span class="badge badge-danger">Sai ${wrongCnt}×</span>` : ''}
+          </div>
+          <div class="syn-card-actions">
+            <button type="button" class="syn-ico-btn ${isStar ? 'is-star' : ''}" onclick="ETS.toggleSynBookmark('${escJsStr(it.id)}')" title="${isStar ? 'Bỏ ghim khó' : 'Ghim ôn lại'}" aria-label="Ghim ôn lại">${icon('star')}</button>
+            <button type="button" class="syn-ico-btn ${isDone ? 'is-done' : ''}" onclick="ETS.toggleSynMastered('${escJsStr(it.id)}')" title="${isDone ? 'Đã thuộc (bấm để ôn lại)' : 'Đánh dấu đã thuộc'}" aria-label="Đánh dấu đã thuộc">${icon('check-circle')}</button>
+          </div>
+        </div>
+
+        <div class="syn-eq-box">
+          <div class="syn-src-col">
+            <div class="syn-eq-lbl">TRONG ĐỀ / AUDIO</div>
+            <div class="syn-src-row">
+              <button type="button" class="syn-speak-mini" onclick="ETS.speakSynText('${escJsStr(it.src_word)}')" title="Nghe phát âm">${icon('volume')}</button>
+              <strong class="syn-src-word">${esc(it.src)}</strong>
+            </div>
+            <div class="syn-src-sub">
+              <span class="syn-pos">${esc(it.pos)}</span>
+              <span class="syn-ipa">${esc(it.ipa)}</span>
+            </div>
+          </div>
+
+          <div class="syn-arrow-col" aria-hidden="true">${icon('arrow-right')}</div>
+
+          <div class="syn-tgt-col">
+            <div class="syn-eq-lbl">ĐÁP ÁN ĐỒNG NGHĨA / PARAPHRASE ETS</div>
+            <div class="syn-chips">
+              ${(it.targets || []).map((t, idx) => `
+                <button type="button" class="syn-chip ${idx === 0 ? 'is-primary' : ''}" onclick="ETS.speakSynText('${escJsStr(t)}')" title="Bấm để nghe phát âm '${esc(t)}'">
+                  ${icon('volume')} <span>${esc(t)}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="syn-vi-row">
+          <strong>Nghĩa sát đề:</strong> ${esc(it.vi)}
+        </div>
+
+        <div class="syn-ex-box">
+          <div class="syn-ex-en">
+            <button type="button" class="syn-speak-mini" onclick="ETS.speakSynText('${escJsStr(it.ex_en)}')" title="Nghe câu ví dụ">${icon('volume')}</button>
+            <span>${highlightWordInSentence(it.ex_en, it.src_word)}</span>
+          </div>
+          <div class="syn-ex-vi vi-only">${esc(it.ex_vi)}</div>
+        </div>
+
+        <div class="syn-trap-box">
+          <span class="syn-trap-ico">${icon('alert')}</span>
+          <div><strong>Bẫy IIG:</strong> ${esc(cleanTrapText(it.trap))}</div>
+        </div>
+
+        <div class="syn-card-foot">
+          <span class="syn-topic-pill">${esc(it.topic)}</span>
+          <div class="syn-src-pills">
+            ${(it.sources || []).map((sr) => `<span class="syn-src-pill">${esc(sr)}</span>`).join('')}
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderMatrixBody(filtered) {
+    const syn = ensureSynState();
+    if (!filtered.length) {
+      return `
+        <div class="card syn-empty">
+          <div style="font-size:1.1rem;font-weight:800;margin-bottom:6px;">Không có mục nào khớp bộ lọc hiện tại</div>
+          <p style="color:var(--ink-muted);margin:0 0 12px;">Thử nới bộ lọc ngày, chủ đề hoặc xóa từ khóa tìm kiếm.</p>
+          <button type="button" class="btn btn-sm btn-primary" onclick="ETS.resetSynFilters()">Đặt lại tất cả bộ lọc</button>
+        </div>
+      `;
+    }
+    const slice = filtered.slice(0, matrixLimit);
+    const remain = filtered.length - slice.length;
+    return `
+      <div class="syn-matrix-grid">
+        ${slice.map((it) => renderMatrixCard(it, syn)).join('')}
+      </div>
+      ${remain > 0 ? `
+        <div style="text-align:center;margin-top:16px;">
+          <button type="button" class="btn btn-primary" onclick="ETS.loadMoreSynMatrix()">
+            Hiển thị thêm (${Math.min(36, remain)} / còn ${remain} mục)
+          </button>
+        </div>
+      ` : ''}
+    `;
+  }
+
+  // ===================== MODE 2: 2-WAY FLASHCARD + SRS =====================
+  function initFlashcardSession(opts) {
+    const syn = ensureSynState();
+    const o = opts || {};
+    let pool = o.customPool || getFilteredItems();
+    if (o.onlyDue) {
+      const now = Date.now();
+      pool = getPack().items.filter((x) => syn.srs[x.id] && syn.srs[x.id].dueAt <= now);
+    }
+    if (!pool.length) pool = getPack().items.slice(0, 25);
+    const size = o.size || Math.min(pool.length, 25);
+    const ordered = o.shuffle ? shuffleArr(pool) : pool.slice();
+    const batch = ordered.slice(0, size);
+    fcSes = {
+      queue: batch,
+      idx: 0,
+      flipped: false,
+      known: 0,
+      missed: [],
+      totalStart: batch.length,
+      dir: syn.fcDir || 'SRC_TO_ANS',
+      done: false,
+    };
+    if (syn.fcAutoSpeak && fcSes.queue[0]) {
+      const cur = fcSes.queue[0];
+      speakSynText(fcSes.dir === 'SRC_TO_ANS' ? cur.src_word : cur.primary_target);
+    }
+  }
+
+  function startSynFlashcard(opts) {
+    const syn = ensureSynState();
+    syn.activeTab = 'flashcard';
+    saveState();
+    initFlashcardSession(opts || {});
+    renderSynonymsHub();
+  }
+
+  function flipSynFlashcard() {
+    if (!fcSes || fcSes.done) return;
+    fcSes.flipped = !fcSes.flipped;
+    const syn = ensureSynState();
+    const cur = fcSes.queue[fcSes.idx];
+    if (fcSes.flipped && cur && syn.fcAutoSpeak) {
+      speakSynText(fcSes.dir === 'SRC_TO_ANS' ? cur.primary_target : cur.src_word);
+    }
+    renderSynonymsHub();
+  }
+
+  function gradeSynFlashcard(rating) {
+    if (!fcSes || fcSes.done) return;
+    const cur = fcSes.queue[fcSes.idx];
+    if (!cur) return;
+    markSynSrs(cur.id, rating);
+    if (rating === 'good') {
+      fcSes.known++;
+    } else {
+      if (!fcSes.missed.some((m) => m.id === cur.id)) fcSes.missed.push(cur);
+      if (rating === 'again') {
+        // Re-insert 3 cards ahead so learner actively recalls again in same session
+        const insertAt = Math.min(fcSes.queue.length, fcSes.idx + 4);
+        fcSes.queue.splice(insertAt, 0, cur);
+      }
+    }
+    fcSes.idx++;
+    fcSes.flipped = false;
+    if (fcSes.idx >= fcSes.queue.length) {
+      fcSes.done = true;
+    } else if (ensureSynState().fcAutoSpeak) {
+      const nxt = fcSes.queue[fcSes.idx];
+      speakSynText(fcSes.dir === 'SRC_TO_ANS' ? nxt.src_word : nxt.primary_target);
+    }
+    renderSynonymsHub();
+  }
+
+  function setSynFcDir(dir) {
+    const syn = ensureSynState();
+    syn.fcDir = dir;
+    saveState();
+    if (fcSes) {
+      fcSes.dir = dir;
+      fcSes.flipped = false;
+    }
+    renderSynonymsHub();
+  }
+
+  function toggleSynFcAutoSpeak() {
+    const syn = ensureSynState();
+    syn.fcAutoSpeak = !syn.fcAutoSpeak;
+    saveState();
+    renderSynonymsHub();
+  }
+
+  function renderFlashcardBody(filtered) {
+    const syn = ensureSynState();
+    if (!fcSes) initFlashcardSession();
+    const s = fcSes;
+
+    const toolbar = `
+      <div class="card syn-mode-bar">
+        <div class="syn-mode-bar-grp">
+          <button type="button" class="btn btn-xs ${s.dir === 'SRC_TO_ANS' ? 'btn-primary' : ''}" onclick="ETS.setSynFcDir('SRC_TO_ANS')">${icon('arrow-right')} Trong Đề → Đáp Án ETS</button>
+          <button type="button" class="btn btn-xs ${s.dir === 'ANS_TO_SRC' ? 'btn-primary' : ''}" onclick="ETS.setSynFcDir('ANS_TO_SRC')">${icon('swap')} Đáp Án ETS → Trong Đề</button>
+        </div>
+        <div class="syn-mode-bar-grp">
+          <button type="button" class="btn btn-xs ${syn.fcAutoSpeak ? 'btn-soft' : ''}" onclick="ETS.toggleSynFcAutoSpeak()">${icon('volume')} Tự đọc: ${syn.fcAutoSpeak ? 'BẬT' : 'TẮT'}</button>
+          <button type="button" class="btn btn-xs" onclick="ETS.startSynFlashcard({ shuffle: true, size: 25 })">${icon('shuffle')} Xáo trộn 25 thẻ</button>
+          <button type="button" class="btn btn-xs" onclick="ETS.startSynFlashcard({ shuffle: false, size: ${filtered.length || 25} })">Học toàn bộ đang lọc (${filtered.length})</button>
+        </div>
+      </div>
+    `;
+
+    if (s.done) {
+      const acc = s.totalStart ? Math.round((s.known / s.totalStart) * 100) : 100;
+      return `
+        ${toolbar}
+        <div class="card syn-summary-card">
+          <div class="syn-summary-ico">${icon('trophy')}</div>
+          <h3>Hoàn Thành Lượt Flashcard Paraphrase!</h3>
+          <p class="syn-summary-sub">Thuộc chắc: <strong style="color:var(--success);">${s.known}</strong> · Cần ôn thêm: <strong style="color:var(--warn);">${s.missed.length}</strong> · Độ nắm vững: <strong>${acc}%</strong></p>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px;">
+            ${s.missed.length ? `<button type="button" class="btn btn-primary" onclick="ETS.retrySynFcMissed()">${icon('refresh')} Ôn ngay ${s.missed.length} thẻ chưa thuộc</button>` : ''}
+            <button type="button" class="btn" onclick="ETS.startSynFlashcard({ shuffle: true, size: 25 })">${icon('shuffle')} Bắt đầu lượt 25 thẻ mới</button>
+          </div>
+        </div>
+      `;
+    }
+
+    const cur = s.queue[s.idx];
+    const pct = Math.round(((s.idx) / Math.max(1, s.queue.length)) * 100);
+    const setInfo = SET_LABELS[cur.set] || { label: cur.set, cls: '' };
+    const isForward = s.dir === 'SRC_TO_ANS';
+
+    return `
+      ${toolbar}
+      <div class="syn-fc-wrap">
+        <div class="syn-fc-prog-row">
+          <span>Thẻ <strong>${s.idx + 1} / ${s.queue.length}</strong> · Đã thuộc lượt này: <strong style="color:var(--success);">${s.known}</strong></span>
+          <span class="syn-kbd-hint">Phím tắt: <kbd>Space</kbd> lật thẻ · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> chấm SRS · <kbd>A</kbd> nghe</span>
+        </div>
+        <div class="progress-track" style="margin-bottom:14px;"><div class="progress-fill" style="width:${pct}%;background:var(--primary);"></div></div>
+
+        <div class="card syn-fc-card ${s.flipped ? 'is-flipped' : ''}" onclick="ETS.flipSynFlashcard()" role="button" tabindex="0">
+          <div class="syn-fc-top">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              <span class="badge ${setInfo.cls}">${esc(setInfo.label)}</span>
+              <span class="badge">Ngày ${cur.day}</span>
+              <span class="syn-topic-pill">${esc(cur.topic)}</span>
+            </div>
+            <button type="button" class="btn btn-xs" onclick="event.stopPropagation();ETS.speakSynText('${escJsStr(isForward ? cur.src_word : cur.primary_target)}')">${icon('volume')} Nghe</button>
+          </div>
+
+          ${!s.flipped ? `
+            <div class="syn-fc-face">
+              <div class="syn-fc-prompt-lbl">${isForward ? 'TRONG ĐỀ / AUDIO ETS — ĐOÁN CỤM ĐỒNG NGHĨA PARAPHRASE' : 'ĐÁP ÁN PARAPHRASE ETS — ĐOÁN TỪ / CỤM GỐC TRONG ĐỀ'}</div>
+              <div class="syn-fc-main-text">${esc(isForward ? cur.src : (cur.targets || []).join('  ·  '))}</div>
+              ${isForward ? `<div class="syn-fc-ipa"><span>${esc(cur.pos)}</span> · ${esc(cur.ipa)}</div>` : ''}
+              <div class="syn-fc-ctx-preview">${isForward ? highlightWordInSentence(cur.ex_en, cur.src_word) : `Gợi ý nghĩa: ${esc(cur.vi)}`}</div>
+              <div class="syn-fc-flip-cta">Bấm vào thẻ hoặc nhấn <kbd>Space</kbd> để xem đáp án &amp; bẫy IIG</div>
+            </div>
+          ` : `
+            <div class="syn-fc-face syn-fc-back" onclick="event.stopPropagation()">
+              <div class="syn-fc-prompt-lbl">${isForward ? 'ĐÁP ÁN ĐỒNG NGHĨA / PARAPHRASE CHUẨN ETS' : 'CỤM / TỪ GỐC TRONG ĐỀ'}</div>
+              <div class="syn-chips" style="justify-content:center;margin:8px 0 12px;">
+                ${(isForward ? cur.targets : [cur.src]).map((t, i) => `
+                  <button type="button" class="syn-chip syn-chip-lg ${i === 0 ? 'is-primary' : ''}" onclick="ETS.speakSynText('${escJsStr(t)}')">
+                    ${icon('volume')} <span>${esc(t)}</span>
+                  </button>
+                `).join('')}
+              </div>
+              <div class="syn-fc-vi-big">${esc(cur.vi)}</div>
+              <div class="syn-ex-box" style="text-align:left;width:100%;max-width:680px;margin:10px auto 0;">
+                <div class="syn-ex-en">
+                  <button type="button" class="syn-speak-mini" onclick="ETS.speakSynText('${escJsStr(cur.ex_en)}')">${icon('volume')}</button>
+                  <span>${highlightWordInSentence(cur.ex_en, cur.src_word)}</span>
+                </div>
+                <div class="syn-ex-vi vi-only">${esc(cur.ex_vi)}</div>
+              </div>
+              <div class="syn-trap-box" style="text-align:left;width:100%;max-width:680px;margin:10px auto 0;">
+                <span class="syn-trap-ico">${icon('alert')}</span>
+                <div><strong>Bẫy IIG:</strong> ${esc(cleanTrapText(cur.trap))}</div>
+              </div>
+              <div class="syn-src-pills" style="justify-content:center;margin-top:10px;">
+                ${(cur.sources || []).map((sr) => `<span class="syn-src-pill">${esc(sr)}</span>`).join('')}
+              </div>
+            </div>
+          `}
+        </div>
+
+        <div class="syn-srs-bar">
+          ${!s.flipped ? `
+            <button type="button" class="btn btn-lg btn-primary" style="min-width:240px;" onclick="ETS.flipSynFlashcard()">Lật Xem Đáp Án (Space)</button>
+          ` : `
+            <button type="button" class="btn syn-srs-btn is-again" onclick="ETS.gradeSynFlashcard('again')"><strong>1 · Chưa nhớ</strong><span>Hỏi lại sau 10 phút</span></button>
+            <button type="button" class="btn syn-srs-btn is-hard" onclick="ETS.gradeSynFlashcard('hard')"><strong>2 · Hơi lờ mờ</strong><span>Ôn lại sau 1 ngày</span></button>
+            <button type="button" class="btn syn-srs-btn is-good" onclick="ETS.gradeSynFlashcard('good')"><strong>3 · Thuộc rồi</strong><span>Nhắc SRS 3–30 ngày</span></button>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
+  function retrySynFcMissed() {
+    if (!fcSes || !fcSes.missed.length) return;
+    initFlashcardSession({ customPool: fcSes.missed.slice(), size: fcSes.missed.length, shuffle: true });
+    renderSynonymsHub();
+  }
+
+  // ===================== MODE 3: AUTHENTIC IIG QUIZ =====================
+  function buildQuizQuestion(it, allItems) {
+    // Authentic ETS 2025-2026 Part 7 "Closest in Meaning" Question!
+    if (it.set === 'ets_real' && it.quiz && it.quiz.options) {
+      return {
+        item: it,
+        isRealEts: true,
+        stem: it.quiz.stem_en,
+        ref: it.quiz.ref || (it.sources && it.sources[0]) || 'ETS Official',
+        options: it.quiz.options,
+        ans: it.quiz.ans,
+      };
+    }
+    // Smart same-set, same-sub distractor sampling for Paraphrase / Synonyms / Collocations
+    const sameSub = allItems.filter((x) => x.id !== it.id && x.set === it.set && x.sub === it.sub && x.primary_target.toLowerCase() !== it.primary_target.toLowerCase());
+    const sameSet = allItems.filter((x) => x.id !== it.id && x.set === it.set && x.primary_target.toLowerCase() !== it.primary_target.toLowerCase());
+    const fallback = allItems.filter((x) => x.id !== it.id && x.primary_target.toLowerCase() !== it.primary_target.toLowerCase());
+
+    const picked = [];
+    const seenT = new Set([it.primary_target.toLowerCase()]);
+    const addFrom = (arr) => {
+      const sh = shuffleArr(arr);
+      for (let i = 0; i < sh.length && picked.length < 3; i++) {
+        const key = sh[i].primary_target.toLowerCase();
+        if (!seenT.has(key)) {
+          seenT.add(key);
+          picked.push({ en: sh[i].primary_target, vi: sh[i].vi });
+        }
+      }
+    };
+    addFrom(sameSub);
+    addFrom(sameSet);
+    addFrom(fallback);
+
+    const choices = shuffleArr([{ en: it.primary_target, vi: it.vi, isCorrect: true }, ...picked]);
+    const letters = ['A', 'B', 'C', 'D'];
+    const options = {};
+    let ans = 'A';
+    choices.forEach((c, idx) => {
+      const lt = letters[idx];
+      options[lt] = { en: c.en, vi: c.vi };
+      if (c.isCorrect) ans = lt;
+    });
+
+    const stem = it.set === 'paraphrase_iig'
+      ? `Trong bài nghe/đọc ETS, cụm "${it.src}" thường được Paraphrase thành đáp án nào?`
+      : `Từ / cụm "${it.src}" đồng nghĩa gần nhất với phương án nào trong bối cảnh TOEIC?`;
+
+    return {
+      item: it,
+      isRealEts: false,
+      stem,
+      ref: (it.sources || []).slice(0, 2).join(' · '),
+      options,
+      ans,
+    };
+  }
+
+  function startSynQuizTimer() {
+    if (quizTimerHandle) clearInterval(quizTimerHandle);
+    quizTimerHandle = setInterval(() => {
+      if (!quizSes || quizSes.done || quizSes.picked) return;
+      quizSes.qSec++;
+      const el = document.getElementById('synQuizClock');
+      if (el) {
+        el.textContent = `${quizSes.qSec}s`;
+        el.classList.toggle('is-slow', quizSes.qSec > 12);
+      }
+    }, 1000);
+  }
+
+  function initQuizSession(scopeOverride) {
+    const syn = ensureSynState();
+    const scope = scopeOverride || syn.quizScope || 'FILTERED';
+    syn.quizScope = scope;
+    saveState();
+    const allItems = getPack().items;
+    let pool = [];
+    if (scope === 'ETS_51') {
+      pool = allItems.filter((x) => x.set === 'ets_real');
+    } else if (scope === 'WRONG') {
+      pool = allItems.filter((x) => (syn.quizWrong[x.id] || 0) > 0);
+    } else {
+      pool = getFilteredItems();
+    }
+    if (!pool.length) pool = allItems;
+    const count = scope === 'ETS_51' ? Math.min(20, pool.length) : Math.min(20, pool.length);
+    const qs = shuffleArr(pool).slice(0, count).map((it) => buildQuizQuestion(it, allItems));
+    quizSes = {
+      scope,
+      questions: qs,
+      idx: 0,
+      picked: null,
+      right: 0,
+      streak: 0,
+      maxStreak: 0,
+      wrongItems: [],
+      qSec: 0,
+      totalSec: 0,
+      done: false,
+    };
+    startSynQuizTimer();
+  }
+
+  function startSynQuiz(scope) {
+    const syn = ensureSynState();
+    syn.activeTab = 'quiz';
+    initQuizSession(scope || syn.quizScope || 'FILTERED');
+    renderSynonymsHub();
+  }
+
+  function pickSynQuizOpt(lt) {
+    if (!quizSes || quizSes.done || quizSes.picked) return;
+    const syn = ensureSynState();
+    const q = quizSes.questions[quizSes.idx];
+    quizSes.picked = lt;
+    quizSes.totalSec += quizSes.qSec;
+    const ok = lt === q.ans;
+    if (ok) {
+      quizSes.right++;
+      quizSes.streak++;
+      if (quizSes.streak > quizSes.maxStreak) quizSes.maxStreak = quizSes.streak;
+      if (quizSes.streak > (syn.quizBestStreak || 0)) syn.quizBestStreak = quizSes.streak;
+      if (syn.quizWrong[q.item.id] > 0) {
+        syn.quizWrong[q.item.id] = Math.max(0, syn.quizWrong[q.item.id] - 1);
+        if (syn.quizWrong[q.item.id] === 0) delete syn.quizWrong[q.item.id];
+      }
+      if (typeof trackDailyProgress === 'function') trackDailyProgress('voca', 1);
+    } else {
+      quizSes.streak = 0;
+      quizSes.wrongItems.push(q.item);
+      syn.quizWrong[q.item.id] = (syn.quizWrong[q.item.id] || 0) + 1;
+      syn.statuses[q.item.id] = 'learning';
+    }
+    saveState();
+    renderSynonymsHub();
+  }
+
+  function nextSynQuizQ() {
+    if (!quizSes || quizSes.done) return;
+    quizSes.idx++;
+    quizSes.picked = null;
+    quizSes.qSec = 0;
+    if (quizSes.idx >= quizSes.questions.length) {
+      quizSes.done = true;
+      stopSynTimers(false);
+    }
+    renderSynonymsHub();
+  }
+
+  function renderQuizBody(filtered) {
+    const syn = ensureSynState();
+    if (!quizSes) initQuizSession();
+    const s = quizSes;
+    const wrongTotal = Object.keys(syn.quizWrong || {}).filter((k) => syn.quizWrong[k] > 0).length;
+
+    const toolbar = `
+      <div class="card syn-mode-bar">
+        <div class="syn-mode-bar-grp">
+          <button type="button" class="btn btn-xs ${s.scope === 'ETS_51' ? 'btn-primary' : ''}" onclick="ETS.startSynQuiz('ETS_51')">${icon('award')} 51 Câu ETS Thật (Part 7)</button>
+          <button type="button" class="btn btn-xs ${s.scope === 'FILTERED' ? 'btn-primary' : ''}" onclick="ETS.startSynQuiz('FILTERED')">${icon('quiz')} Hỗn hợp đang lọc (${filtered.length})</button>
+          <button type="button" class="btn btn-xs ${s.scope === 'WRONG' ? 'btn-danger' : ''}" ${wrongTotal ? '' : 'disabled'} onclick="ETS.startSynQuiz('WRONG')">${icon('alert')} Ôn câu từng sai (${wrongTotal})</button>
+        </div>
+        <div class="syn-mode-bar-grp">
+          <span class="badge badge-success">Đúng: ${s.right}/${s.idx + (s.picked ? 1 : 0)}</span>
+          <span class="badge badge-warn">${icon('flame')} Streak: ${s.streak}</span>
+          <button type="button" class="btn btn-xs" onclick="ETS.startSynQuiz('${escJsStr(s.scope)}')">${icon('refresh')} Đề mới</button>
+        </div>
+      </div>
+    `;
+
+    if (s.done) {
+      const pct = Math.round((s.right / Math.max(1, s.questions.length)) * 100);
+      const avgSec = (s.totalSec / Math.max(1, s.questions.length)).toFixed(1);
+      return `
+        ${toolbar}
+        <div class="card syn-summary-card">
+          <div class="syn-summary-ico">${icon('trophy')}</div>
+          <h3>Kết Quả Luyện Trắc Nghiệm Đồng Nghĩa IIG</h3>
+          <div class="syn-quiz-score-big">${s.right} / ${s.questions.length} <span>(${pct}%)</span></div>
+          <p class="syn-summary-sub">Tốc độ trung bình: <strong>${avgSec}s/câu</strong> (mục tiêu phòng thi ≤ 12s) · Chuỗi đúng cao nhất: <strong>${s.maxStreak}</strong></p>
+          ${s.wrongItems.length ? `
+            <div class="syn-missed-list">
+              <div style="font-weight:800;font-size:0.86rem;margin-bottom:8px;color:var(--danger);">Các mục cần nhớ kỹ vừa làm sai (${s.wrongItems.length}):</div>
+              ${s.wrongItems.map((w) => `
+                <div class="syn-missed-row">
+                  <strong>${esc(w.src)}</strong> → <span class="syn-missed-ans">${esc(w.primary_target)}</span>
+                  <span style="color:var(--ink-muted);">(${esc(w.vi)})</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<p style="color:var(--success);font-weight:800;">Xuất sắc! Không sai câu nào trong lượt này!</p>'}
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px;">
+            <button type="button" class="btn btn-primary" onclick="ETS.startSynQuiz('${escJsStr(s.scope)}')">${icon('refresh')} Làm bộ 20 câu mới</button>
+            ${wrongTotal > 0 ? `<button type="button" class="btn btn-danger" onclick="ETS.startSynQuiz('WRONG')">${icon('alert')} Đánh lại ${wrongTotal} câu hay sai</button>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    const q = s.questions[s.idx];
+    const it = q.item;
+    const pct = Math.round((s.idx / Math.max(1, s.questions.length)) * 100);
+
+    return `
+      ${toolbar}
+      <div class="syn-quiz-wrap">
+        <div class="syn-fc-prog-row">
+          <span>Câu <strong>${s.idx + 1} / ${s.questions.length}</strong> · <span class="badge ${q.isRealEts ? 'badge-danger' : 'badge-primary'}">${esc(q.ref)}</span></span>
+          <span class="syn-quiz-clock ${s.qSec > 12 ? 'is-slow' : ''}" id="synQuizClock">${s.qSec}s</span>
+        </div>
+        <div class="progress-track" style="margin-bottom:14px;"><div class="progress-fill" style="width:${pct}%;background:var(--primary);"></div></div>
+
+        <div class="card syn-quiz-card">
+          <div class="syn-quiz-ctx">
+            <div class="syn-eq-lbl" style="display:flex;justify-content:space-between;align-items:center;">
+              <span>${q.isRealEts ? 'TRÍCH ĐOẠN ĐỀ THI THẬT ETS PART 7' : 'NGỮ CẢNH THI TOEIC IIG'}</span>
+              <button type="button" class="btn btn-xs" onclick="ETS.speakSynText('${escJsStr(it.ex_en)}')">${icon('volume')} Nghe câu</button>
+            </div>
+            <div class="syn-quiz-quote">${highlightWordInSentence(it.ex_en, it.src_word)}</div>
+            ${s.picked ? `<div class="syn-ex-vi vi-only" style="margin-top:6px;">${esc(it.ex_vi)}</div>` : ''}
+          </div>
+
+          <div class="syn-quiz-stem">${esc(q.stem)}</div>
+
+          <div class="syn-quiz-opts">
+            ${['A', 'B', 'C', 'D'].map((lt) => {
+              const o = q.options[lt] || { en: '', vi: '' };
+              let cls = '';
+              if (s.picked) {
+                if (lt === q.ans) cls = 'is-correct';
+                else if (lt === s.picked) cls = 'is-wrong';
+                else cls = 'is-dim';
+              }
+              return `
+                <button type="button" class="syn-quiz-opt ${cls}" ${s.picked ? 'disabled' : ''} onclick="ETS.pickSynQuizOpt('${lt}')">
+                  <span class="syn-opt-letter">${lt}</span>
+                  <div class="syn-opt-body">
+                    <div class="syn-opt-en">${esc(o.en)}</div>
+                    ${s.picked && o.vi ? `<div class="syn-opt-vi">${esc(o.vi)}</div>` : ''}
+                  </div>
+                  ${s.picked && lt === q.ans ? `<span class="syn-opt-mark">${icon('check-circle')}</span>` : ''}
+                  ${s.picked && lt === s.picked && lt !== q.ans ? `<span class="syn-opt-mark">${icon('x-circle')}</span>` : ''}
+                </button>
+              `;
+            }).join('')}
+          </div>
+
+          ${s.picked ? `
+            <div class="syn-quiz-explain">
+              <div class="syn-quiz-verdict ${s.picked === q.ans ? 'ok' : 'bad'}">
+                ${s.picked === q.ans ? `${icon('check-circle')} Chính xác!` : `${icon('x-circle')} Chưa chính xác — Đáp án đúng là (${q.ans}) ${esc(q.options[q.ans].en)}`}
+              </div>
+              <div style="margin:8px 0 6px;font-size:0.9rem;">
+                <strong>Chuỗi đồng nghĩa chuẩn ETS:</strong>
+                <span class="syn-chips" style="display:inline-flex;vertical-align:middle;margin-left:6px;">
+                  ${(it.targets || []).map((t, i) => `<button type="button" class="syn-chip ${i === 0 ? 'is-primary' : ''}" onclick="ETS.speakSynText('${escJsStr(t)}')">${icon('volume')} ${esc(t)}</button>`).join('')}
+                </span>
+              </div>
+              <div class="syn-trap-box">
+                <span class="syn-trap-ico">${icon('alert')}</span>
+                <div><strong>Giải thích &amp; Bẫy IIG:</strong> ${esc(cleanTrapText(it.trap))}</div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+                <button type="button" class="btn btn-primary" onclick="ETS.nextSynQuizQ()">
+                  ${s.idx + 1 < s.questions.length ? `Câu tiếp theo (Enter) ${icon('arrow-right')}` : `Xem Tổng Kết ${icon('trophy')}`}
+                </button>
+              </div>
+            </div>
+          ` : `
+            <div class="syn-kbd-hint" style="margin-top:10px;text-align:right;">Mẹo: Nhấn phím <kbd>A</kbd><kbd>B</kbd><kbd>C</kbd><kbd>D</kbd> hoặc <kbd>1</kbd>–<kbd>4</kbd> để chọn nhanh</div>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
+  // ===================== MODE 4: SPEED PARAPHRASE MATCHING =====================
+  function startMatchTimer() {
+    if (matchTimerHandle) clearInterval(matchTimerHandle);
+    matchTimerHandle = setInterval(() => {
+      if (!matchSes || matchSes.done) return;
+      const elapsed = ((Date.now() - matchSes.startedAt) / 1000).toFixed(1);
+      const el = document.getElementById('synMatchClock');
+      if (el) el.textContent = `${elapsed}s`;
+    }, 100);
+  }
+
+  function initMatchSession() {
+    let pool = getFilteredItems();
+    // Ensure distinct src & primary_target inside 6 pairs so matching is 100% unambiguous!
+    if (pool.length < 6) pool = getPack().items;
+    const sh = shuffleArr(pool);
+    const chosen = [];
+    const seenSrc = new Set();
+    const seenTgt = new Set();
+    for (let i = 0; i < sh.length && chosen.length < 6; i++) {
+      const it = sh[i];
+      const ks = it.src.toLowerCase();
+      const kt = it.primary_target.toLowerCase();
+      if (!seenSrc.has(ks) && !seenTgt.has(kt)) {
+        seenSrc.add(ks);
+        seenTgt.add(kt);
+        chosen.push(it);
+      }
+    }
+    matchSes = {
+      left: chosen.map((it) => ({ id: it.id, text: it.src, sub: it.pos, word: it.src_word, vi: it.vi })),
+      right: shuffleArr(chosen.map((it) => ({ id: it.id, text: it.primary_target, hint: (it.targets[1] || ''), word: it.primary_target }))),
+      selLeft: null,
+      selRight: null,
+      matched: {},
+      wrongFlash: null,
+      mistakes: 0,
+      streak: 0,
+      startedAt: Date.now(),
+      elapsedSec: 0,
+      done: false,
+    };
+    startMatchTimer();
+  }
+
+  function restartSynMatch() {
+    stopSynTimers(false);
+    initMatchSession();
+    renderSynonymsHub();
+  }
+
+  function pickSynMatch(side, id) {
+    if (!matchSes || matchSes.done || matchSes.matched[id]) return;
+    if (side === 'L') {
+      matchSes.selLeft = matchSes.selLeft === id ? null : id;
+    } else {
+      matchSes.selRight = matchSes.selRight === id ? null : id;
+    }
+    if (matchSes.selLeft && matchSes.selRight) {
+      if (matchSes.selLeft === matchSes.selRight) {
+        const hitId = matchSes.selLeft;
+        matchSes.matched[hitId] = true;
+        matchSes.selLeft = null;
+        matchSes.selRight = null;
+        matchSes.streak++;
+        matchSes.wrongFlash = null;
+        const it = getItemById(hitId);
+        if (it) speakSynText(it.primary_target);
+        if (Object.keys(matchSes.matched).length >= matchSes.left.length) {
+          matchSes.done = true;
+          matchSes.elapsedSec = Number(((Date.now() - matchSes.startedAt) / 1000).toFixed(1));
+          stopSynTimers(false);
+          const syn = ensureSynState();
+          if (!syn.matchBestSec || matchSes.elapsedSec < syn.matchBestSec) {
+            syn.matchBestSec = matchSes.elapsedSec;
+          }
+          if (typeof trackDailyProgress === 'function') trackDailyProgress('voca', 6);
+          saveState();
+        }
+      } else {
+        matchSes.mistakes++;
+        matchSes.streak = 0;
+        const badL = matchSes.selLeft;
+        const badR = matchSes.selRight;
+        matchSes.wrongFlash = { L: badL, R: badR };
+        matchSes.selLeft = null;
+        matchSes.selRight = null;
+        renderSynonymsHub();
+        setTimeout(() => {
+          if (matchSes && matchSes.wrongFlash && matchSes.wrongFlash.L === badL) {
+            matchSes.wrongFlash = null;
+            renderSynonymsHub();
+          }
+        }, 420);
+        return;
+      }
+    }
+    renderSynonymsHub();
+  }
+
+  function renderMatchBody() {
+    const syn = ensureSynState();
+    if (!matchSes) initMatchSession();
+    const s = matchSes;
+    const matchedCnt = Object.keys(s.matched).length;
+    const liveSec = s.done ? s.elapsedSec.toFixed(1) : ((Date.now() - s.startedAt) / 1000).toFixed(1);
+
+    return `
+      <div class="card syn-mode-bar">
+        <div class="syn-mode-bar-grp">
+          <span class="badge badge-primary">Đã ghép: ${matchedCnt} / ${s.left.length}</span>
+          <span class="badge badge-warn">${icon('clock')} <span id="synMatchClock">${liveSec}s</span></span>
+          <span class="badge badge-success">Combo: ${s.streak}</span>
+          ${syn.matchBestSec ? `<span class="badge badge-accent">${icon('trophy')} Kỷ lục: ${syn.matchBestSec}s</span>` : ''}
+        </div>
+        <button type="button" class="btn btn-xs btn-primary" onclick="ETS.restartSynMatch()">${icon('shuffle')} Đổi 6 cặp mới</button>
+      </div>
+
+      ${s.done ? `
+        <div class="card syn-summary-card">
+          <div class="syn-summary-ico">${icon('zap')}</div>
+          <h3>Hoàn Thành Ghép Cặp Trong ${s.elapsedSec} Giây!</h3>
+          <p class="syn-summary-sub">Tốc độ trung bình: <strong>${(s.elapsedSec / Math.max(1, s.left.length)).toFixed(2)}s / cặp</strong> · Số lần nhầm: <strong>${s.mistakes}</strong></p>
+          <div class="syn-missed-list" style="text-align:left;">
+            ${s.left.map((l) => {
+              const it = getItemById(l.id);
+              return `<div class="syn-missed-row"><strong>${esc(l.text)}</strong> → <span class="syn-missed-ans">${esc(it ? it.primary_target : '')}</span> <span style="color:var(--ink-muted);">(${esc(l.vi)})</span></div>`;
+            }).join('')}
+          </div>
+          <button type="button" class="btn btn-primary" style="margin-top:14px;" onclick="ETS.restartSynMatch()">${icon('shuffle')} Chơi ván tiếp theo (6 cặp mới)</button>
+        </div>
+      ` : `
+        <div class="syn-match-board">
+          <div class="syn-match-col">
+            <div class="syn-match-col-head">CỘT A · TỪ / CỤM TRONG ĐỀ &amp; AUDIO</div>
+            ${s.left.map((tile) => {
+              const done = !!s.matched[tile.id];
+              const sel = s.selLeft === tile.id;
+              const bad = s.wrongFlash && s.wrongFlash.L === tile.id;
+              return `
+                <button type="button" class="match-tile syn-match-tile ${done ? 'is-matched' : ''} ${sel ? 'is-selected' : ''} ${bad ? 'is-wrong' : ''}" ${done ? 'disabled' : ''} onclick="ETS.pickSynMatch('L','${escJsStr(tile.id)}')">
+                  <span class="syn-match-txt">${esc(tile.text)}</span>
+                  <span class="syn-pos">${esc(tile.sub)}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+          <div class="syn-match-col">
+            <div class="syn-match-col-head">CỘT B · ĐÁP ÁN PARAPHRASE ETS</div>
+            ${s.right.map((tile) => {
+              const done = !!s.matched[tile.id];
+              const sel = s.selRight === tile.id;
+              const bad = s.wrongFlash && s.wrongFlash.R === tile.id;
+              return `
+                <button type="button" class="match-tile syn-match-tile ${done ? 'is-matched' : ''} ${sel ? 'is-selected' : ''} ${bad ? 'is-wrong' : ''}" ${done ? 'disabled' : ''} onclick="ETS.pickSynMatch('R','${escJsStr(tile.id)}')">
+                  <span class="syn-match-txt">${esc(tile.text)}</span>
+                  ${tile.hint ? `<span class="syn-match-hint">≈ ${esc(tile.hint)}</span>` : ''}
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `}
+    `;
+  }
+
+  // ===================== MODE 5: QUICK CRAM SHEET + HANDS-FREE + PRINT A4 =====================
+  function toggleSynCramMask() {
+    cramState.maskAns = !cramState.maskAns;
+    cramState.revealed = {};
+    renderSynonymsHub();
+  }
+
+  function revealSynCramRow(id) {
+    if (!cramState.maskAns) return;
+    cramState.revealed[id] = !cramState.revealed[id];
+    const row = document.getElementById(`synCramRow_${id}`);
+    if (row) row.classList.toggle('is-revealed', !!cramState.revealed[id]);
+  }
+
+  function setSynCramRate(r) {
+    cramState.rate = Number(r) || 1.0;
+    renderSynonymsHub();
+  }
+
+  function stepSynHandsFree() {
+    if (!cramState.playing || state.route !== 'synonyms') {
+      stopSynTimers(false);
+      return;
+    }
+    const list = getFilteredItems();
+    if (!list.length || cramState.idx >= list.length) {
+      cramState.playing = false;
+      cramState.idx = -1;
+      toast('Đã đọc hết danh sách đồng nghĩa đang lọc!');
+      renderSynonymsHub();
+      return;
+    }
+    const cur = list[cramState.idx];
+    document.querySelectorAll('.syn-cram-row.is-playing').forEach((el) => el.classList.remove('is-playing'));
+    const rowEl = document.getElementById(`synCramRow_${cur.id}`);
+    if (rowEl) {
+      rowEl.classList.add('is-playing');
+      rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    const phrase = `${cur.src_word}. ${cur.targets.slice(0, 2).join(', ')}.`;
+    speakSynText(phrase, cramState.rate);
+    const estMs = Math.max(2600, Math.round((phrase.length * 72) / cramState.rate) + 1200);
+    cramState.timer = setTimeout(() => {
+      cramState.idx++;
+      stepSynHandsFree();
+    }, estMs);
+  }
+
+  function toggleSynHandsFree() {
+    if (cramState.playing) {
+      stopSynonymsRuntime();
+      renderSynonymsHub();
+      return;
+    }
+    const list = getFilteredItems();
+    if (!list.length) {
+      toast('Không có mục nào trong bộ lọc để phát âm!');
+      return;
+    }
+    cramState.playing = true;
+    cramState.idx = 0;
+    renderSynonymsHub();
+    stepSynHandsFree();
+  }
+
+  function printSynCramSheet() {
+    const list = getFilteredItems();
+    if (!list.length) {
+      toast('Không có mục nào để in!');
+      return;
+    }
+    const win = window.open('', '_blank', 'width=980,height=780');
+    if (!win) {
+      toast('Trình duyệt đã chặn cửa sổ bật lên — vui lòng cho phép popup để in bảng A4.');
+      return;
+    }
+    const rowsHtml = list.map((it, i) => `
+      <tr>
+        <td style="text-align:center;color:#64748b;font-weight:700;">${i + 1}</td>
+        <td><strong>${esc(it.src)}</strong> <span style="color:#64748b;font-size:11px;">(${esc(it.pos)} ${esc(it.ipa)})</span></td>
+        <td style="color:#1d4ed8;font-weight:700;">${esc((it.targets || []).join(' · '))}</td>
+        <td>${esc(it.vi)}<div style="color:#92400e;font-size:11px;margin-top:2px;">Bẫy: ${esc(it.trap)}</div></td>
+      </tr>
+    `).join('');
+    win.document.write(`<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Bảng Ôn Đồng Nghĩa &amp; Paraphrase Chuẩn IIG (${list.length} mục)</title>
+      <style>
+        body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;margin:18px;font-size:12.5px;line-height:1.4;}
+        h1{font-size:18px;margin:0 0 4px;} .sub{color:#475569;margin:0 0 12px;font-size:12px;}
+        table{width:100%;border-collapse:collapse;} th,td{border:1px solid #cbd5e1;padding:6px 8px;vertical-align:top;text-align:left;}
+        th{background:#f1f5f9;font-weight:800;} tr:nth-child(even){background:#f8fafc;}
+        @media print{body{margin:8mm;} .no-print{display:none;}}
+      </style></head><body>
+      <div class="no-print" style="margin-bottom:12px;"><button onclick="window.print()" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">In / Lưu PDF A4</button></div>
+      <h1>Bảng Ôn Cấp Tốc Đồng Nghĩa &amp; Paraphrase Chuẩn IIG (${list.length} mục)</h1>
+      <p class="sub">Nguồn kiểm chứng: ETS 2025–2026 (20 đề thật) · TSL 1.2 (Browne &amp; Culligan) · Oxford · Cambridge · Barron's · Hackers · Magoosh/IIG</p>
+      <table><thead><tr><th style="width:32px;">#</th><th style="width:24%;">Trong Đề / Audio</th><th style="width:28%;">Đáp Án Paraphrase ETS</th><th>Nghĩa Sát Đề &amp; Bẫy IIG</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    </body></html>`);
+    win.document.close();
+  }
+
+  function renderCramBody(filtered) {
+    const syn = ensureSynState();
+    return `
+      <div class="card syn-mode-bar">
+        <div class="syn-mode-bar-grp">
+          <button type="button" class="btn btn-xs ${cramState.maskAns ? 'btn-primary' : ''}" onclick="ETS.toggleSynCramMask()">
+            ${icon('eye')} ${cramState.maskAns ? 'Đang che đáp án (Bấm từng dòng để lật)' : 'Che cột Đáp án để tự kiểm tra'}
+          </button>
+          <button type="button" class="btn btn-xs ${cramState.playing ? 'btn-danger' : 'btn-success'}" onclick="ETS.toggleSynHandsFree()">
+            ${cramState.playing ? `${icon('pause')} Dừng nghe rảnh tay` : `${icon('headphones')} Nghe rảnh tay (${filtered.length} mục)`}
+          </button>
+          <div style="display:inline-flex;gap:4px;align-items:center;">
+            ${[0.9, 1.0, 1.1].map((r) => `<button type="button" class="btn btn-xs ${cramState.rate === r ? 'btn-primary' : ''}" onclick="ETS.setSynCramRate(${r})">${r}×</button>`).join('')}
+          </div>
+        </div>
+        <button type="button" class="btn btn-xs" onclick="ETS.printSynCramSheet()">${icon('printer')} In Bảng Ôn A4 (${filtered.length})</button>
+      </div>
+
+      ${!filtered.length ? `
+        <div class="card syn-empty">Không có mục nào khớp bộ lọc. <button type="button" class="btn btn-xs btn-primary" onclick="ETS.resetSynFilters()">Đặt lại</button></div>
+      ` : `
+        <div class="card syn-cram-table-wrap">
+          <table class="syn-cram-table">
+            <thead>
+              <tr>
+                <th style="width:44px;">#</th>
+                <th style="width:26%;">Trong Đề / Audio</th>
+                <th style="width:30%;">Đáp Án Paraphrase ETS</th>
+                <th>Nghĩa Sát Đề &amp; Bẫy IIG</th>
+                <th style="width:74px;text-align:center;">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map((it, idx) => {
+                const isDone = syn.statuses[it.id] === 'mastered';
+                const isRev = !!cramState.revealed[it.id];
+                const isPlay = cramState.playing && cramState.idx === idx;
+                return `
+                  <tr id="synCramRow_${esc(it.id)}" class="syn-cram-row ${cramState.maskAns ? 'is-masked' : ''} ${isRev ? 'is-revealed' : ''} ${isPlay ? 'is-playing' : ''}" onclick="ETS.revealSynCramRow('${escJsStr(it.id)}')">
+                    <td class="syn-cram-num">${idx + 1}</td>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:6px;">
+                        <button type="button" class="syn-speak-mini" onclick="event.stopPropagation();ETS.speakSynText('${escJsStr(it.src_word)}')">${icon('volume')}</button>
+                        <div>
+                          <strong>${esc(it.src)}</strong>
+                          <div style="font-size:0.75rem;color:var(--ink-subtle);">${esc(it.pos)} · ${esc(it.ipa)} · Ngày ${it.day}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="syn-cram-ans-cell">
+                      <div class="syn-cram-ans-inner">
+                        ${(it.targets || []).map((t, ti) => `<span class="syn-cram-pill ${ti === 0 ? 'is-main' : ''}">${esc(t)}</span>`).join('')}
+                      </div>
+                      <span class="syn-cram-mask-hint">Bấm để hiện đáp án</span>
+                    </td>
+                    <td>
+                      <div style="font-weight:700;font-size:0.88rem;">${esc(it.vi)}</div>
+                      <div style="font-size:0.78rem;color:var(--ink-muted);margin-top:2px;">${esc(it.trap)}</div>
+                    </td>
+                    <td style="text-align:center;" onclick="event.stopPropagation()">
+                      <button type="button" class="syn-ico-btn ${isDone ? 'is-done' : ''}" onclick="ETS.toggleSynMastered('${escJsStr(it.id)}')" title="Đánh dấu đã thuộc">${icon('check-circle')}</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    `;
+  }
+
+  // ===================== MAIN SYNONYMS HUB RENDERER =====================
+  function renderSynonymsHub(opts) {
+    const root = document.getElementById('appContent');
+    if (!root) return;
+    const pack = getPack();
+    const syn = ensureSynState();
+    const f = syn.filter;
+    const all = pack.items;
+    const filtered = getFilteredItems();
+    const now = Date.now();
+
+    let mastered = 0, learning = 0, bookmarked = 0, dueSrs = 0, wrongCnt = 0;
+    const dayDone = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const dayTot = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const setTot = { ets_real: 0, core_syn: 0, paraphrase_iig: 0, phrases_p56: 0 };
+
+    for (let i = 0; i < all.length; i++) {
+      const it = all[i];
+      const st = syn.statuses[it.id];
+      if (st === 'mastered') {
+        mastered++;
+        if (dayDone[it.day] != null) dayDone[it.day]++;
+      } else if (st === 'learning') {
+        learning++;
+      }
+      if (dayTot[it.day] != null) dayTot[it.day]++;
+      if (setTot[it.set] != null) setTot[it.set]++;
+      if (syn.bookmarks[it.id]) bookmarked++;
+      if (syn.srs[it.id] && syn.srs[it.id].dueAt <= now) dueSrs++;
+      if ((syn.quizWrong[it.id] || 0) > 0) wrongCnt++;
+    }
+
+    const activeDayMeta = f.day !== 'ALL' ? (pack.daysMeta || []).find((d) => Number(d.day) === Number(f.day)) : null;
+
+    let bodyHtml = '';
+    if (syn.activeTab === 'matrix') bodyHtml = renderMatrixBody(filtered);
+    else if (syn.activeTab === 'flashcard') bodyHtml = renderFlashcardBody(filtered);
+    else if (syn.activeTab === 'quiz') bodyHtml = renderQuizBody(filtered);
+    else if (syn.activeTab === 'match') bodyHtml = renderMatchBody();
+    else bodyHtml = renderCramBody(filtered);
+
+    const hasActiveFilter = f.set !== 'ALL' || f.day !== 'ALL' || f.topic !== 'ALL' || f.part !== 'ALL' || f.tier !== 'ALL' || f.status !== 'ALL' || !!f.search;
+    const isPracticeFocus = syn.activeTab === 'flashcard' || syn.activeTab === 'quiz' || syn.activeTab === 'match';
+    const showFullChrome = !isPracticeFocus || drillFiltersOpen;
+
+    root.innerHTML = `
+      <div class="syn-page">
+        <div class="view-header syn-header">
+          <div>
+            <h2 class="view-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              ${icon('swap')} Đồng Nghĩa &amp; Paraphrase Chuẩn IIG
+              <span class="badge badge-primary">${all.length} Mục Tinh Gọn · Cấp Tốc 5 Ngày</span>
+            </h2>
+            ${!isPracticeFocus ? `<p class="syn-subtitle">Tổng hợp &amp; kiểm chứng chéo từ <strong>20 đề ETS 2025–2026 thật</strong>, <strong>TSL 1.2 (1,5M từ)</strong>, <strong>Oxford</strong>, <strong>Cambridge</strong>, <strong>Barron's / Hackers</strong> &amp; <strong>Magoosh/IIG</strong>.</p>` : ''}
+          </div>
+          <div class="syn-head-actions">
+            ${isPracticeFocus ? `
+              <button type="button" class="btn btn-sm ${drillFiltersOpen ? 'btn-primary' : ''}" onclick="ETS.toggleSynDrillFilters()">
+                ${icon('filter')} ${drillFiltersOpen ? 'Thu gọn bộ lọc' : `Bộ lọc & Lộ trình (${filtered.length})`}
+              </button>
+            ` : ''}
+            <button type="button" class="btn btn-sm ${sourcesOpen ? 'btn-primary' : ''}" onclick="ETS.toggleSynSources()">
+              ${icon('shield-check')} Nguồn Uy Tín (${(pack.sourcesMeta || []).length})
+            </button>
+            <button type="button" class="btn btn-sm" onclick="ETS.printSynCramSheet()">
+              ${icon('printer')} In Bảng A4
+            </button>
+          </div>
+        </div>
+
+        ${sourcesOpen ? `
+          <div class="card syn-sources-drawer">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+              <strong style="font-size:0.95rem;display:inline-flex;align-items:center;gap:6px;">${icon('shield-check')} 6 Hệ Thống Nguồn Kiểm Chứng Chéo</strong>
+              <button type="button" class="btn btn-xs btn-ghost" onclick="ETS.toggleSynSources()">${icon('close')}</button>
+            </div>
+            <div class="syn-sources-grid">
+              ${(pack.sourcesMeta || []).map((sr) => `
+                <div class="syn-source-item">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
+                    <strong style="font-size:0.86rem;">${esc(sr.name)}</strong>
+                    <span class="badge badge-primary">${esc(sr.badge)}</span>
+                  </div>
+                  <p style="margin:0 0 6px;font-size:0.8rem;color:var(--ink-muted);line-height:1.45;">${esc(sr.desc)}</p>
+                  <a href="${esc(sr.url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.78rem;font-weight:700;">${esc(sr.url)} ↗</a>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- 5 Interactive Study Modes Bar (Always prominent!) -->
+        <div class="syn-tabs-bar" role="tablist" aria-label="Chế độ học Đồng nghĩa IIG">
+          <button type="button" role="tab" aria-selected="${syn.activeTab === 'matrix'}" class="syn-mode-tab ${syn.activeTab === 'matrix' ? 'active' : ''}" onclick="ETS.setSynTab('matrix')">
+            ${icon('map-grid')} <span>1. Bản Đồ Tra Cứu</span>
+          </button>
+          <button type="button" role="tab" aria-selected="${syn.activeTab === 'flashcard'}" class="syn-mode-tab ${syn.activeTab === 'flashcard' ? 'active' : ''}" onclick="ETS.setSynTab('flashcard')">
+            ${icon('cards')} <span>2. Flashcard 2 Chiều</span>
+          </button>
+          <button type="button" role="tab" aria-selected="${syn.activeTab === 'quiz'}" class="syn-mode-tab ${syn.activeTab === 'quiz' ? 'active' : ''}" onclick="ETS.setSynTab('quiz')">
+            ${icon('quiz')} <span>3. Trắc Nghiệm IIG</span>
+          </button>
+          <button type="button" role="tab" aria-selected="${syn.activeTab === 'match'}" class="syn-mode-tab ${syn.activeTab === 'match' ? 'active' : ''}" onclick="ETS.setSynTab('match')">
+            ${icon('match')} <span>4. Ghép Cặp Phản Xạ</span>
+          </button>
+          <button type="button" role="tab" aria-selected="${syn.activeTab === 'cram'}" class="syn-mode-tab ${syn.activeTab === 'cram' ? 'active' : ''}" onclick="ETS.setSynTab('cram')">
+            ${icon('headphones')} <span>5. Lướt Nhanh &amp; Nghe</span>
+          </button>
+        </div>
+
+        ${showFullChrome ? `
+          <!-- 4 KPI Cards -->
+          <div class="kpi-grid syn-kpi-grid">
+            <div class="card kpi-card">
+              <div class="kpi-label">Đã Thuộc Lòng</div>
+              <div class="kpi-val" style="color:var(--success);">${mastered} <span style="font-size:0.9rem;color:var(--ink-subtle);">/ ${all.length}</span></div>
+              <div class="progress-track" style="margin-top:6px;"><div class="progress-fill" style="width:${Math.round((mastered / Math.max(1, all.length)) * 100)}%;background:var(--success);"></div></div>
+            </div>
+            <div class="card kpi-card">
+              <div class="kpi-label">Đang Ôn / Ghim Khó</div>
+              <div class="kpi-val" style="color:var(--warn);">${learning} <span style="font-size:0.9rem;color:var(--ink-subtle);">/ ${bookmarked} ★</span></div>
+              <div class="kpi-sub">Câu từng sai Quiz: <strong style="color:var(--danger);">${wrongCnt}</strong></div>
+            </div>
+            <div class="card kpi-card">
+              <div class="kpi-label">Đến Hạn Ôn SRS</div>
+              <div class="kpi-val" style="color:var(--primary);">${dueSrs}</div>
+              <div class="kpi-sub">${dueSrs > 0 ? '<a href="#" onclick="event.preventDefault();ETS.startSynFlashcard({onlyDue:true})">Ôn SRS ngay →</a>' : 'Hôm nay đã gọn sạch!'}</div>
+            </div>
+            <div class="card kpi-card">
+              <div class="kpi-label">Phản Xạ Thi IIG</div>
+              <div class="kpi-val" style="color:var(--accent);">${syn.quizBestStreak || 0} <span style="font-size:0.86rem;color:var(--ink-subtle);">streak</span></div>
+              <div class="kpi-sub">Kỷ lục ghép 6 cặp: <strong>${syn.matchBestSec ? `${syn.matchBestSec}s` : 'Chưa thử'}</strong></div>
+            </div>
+          </div>
+
+          <!-- 5-Day Intensive Sprint Ribbon -->
+          <div class="card syn-days-card">
+            <div class="syn-days-head">
+              <span style="font-size:0.78rem;font-weight:800;color:var(--ink-subtle);display:inline-flex;align-items:center;gap:5px;">
+                ${icon('calendar')} LỘ TRÌNH HỌC CẤP TỐC 5 NGÀY TRƯỚC KÌ THI IIG
+              </span>
+              ${activeDayMeta ? `<span style="font-size:0.82rem;color:var(--primary);font-weight:700;">${esc(activeDayMeta.title)} — ${esc(activeDayMeta.desc)}</span>` : `<span style="font-size:0.8rem;color:var(--ink-muted);">~51 mục trọng tâm / ngày · Chạm vào từng ngày để lọc</span>`}
+            </div>
+            <div class="syn-day-pills">
+              <button type="button" class="syn-day-pill ${f.day === 'ALL' ? 'active' : ''}" onclick="ETS.setSynFilter('day','ALL')">
+                <strong>Tất cả 5 ngày</strong><span>${mastered}/${all.length}</span>
+              </button>
+              ${(pack.daysMeta || []).map((d) => {
+                const dn = dayDone[d.day] || 0;
+                const dt = dayTot[d.day] || d.count || 0;
+                const isAct = Number(f.day) === Number(d.day);
+                return `
+                  <button type="button" class="syn-day-pill ${isAct ? 'active' : ''} ${dn >= dt && dt > 0 ? 'is-complete' : ''}" onclick="ETS.setSynFilter('day',${d.day})">
+                    <strong>Ngày ${d.day}</strong><span>${dn}/${dt}</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Shared Smart Filter Bar -->
+          <div class="card syn-filter-card">
+            <div class="syn-set-pills">
+              <button type="button" class="btn btn-xs ${f.set === 'ALL' ? 'btn-primary' : ''}" onclick="ETS.setSynFilter('set','ALL')">Tất cả (${all.length})</button>
+              <button type="button" class="btn btn-xs ${f.set === 'ets_real' ? 'btn-primary' : ''}" onclick="ETS.setSynFilter('set','ets_real')">ETS Thật Part 7 (${setTot.ets_real})</button>
+              <button type="button" class="btn btn-xs ${f.set === 'core_syn' ? 'btn-primary' : ''}" onclick="ETS.setSynFilter('set','core_syn')">Đồng Nghĩa Cốt Lõi (${setTot.core_syn})</button>
+              <button type="button" class="btn btn-xs ${f.set === 'paraphrase_iig' ? 'btn-primary' : ''}" onclick="ETS.setSynFilter('set','paraphrase_iig')">Paraphrase P1·3·4·7 (${setTot.paraphrase_iig})</button>
+              <button type="button" class="btn btn-xs ${f.set === 'phrases_p56' ? 'btn-primary' : ''}" onclick="ETS.setSynFilter('set','phrases_p56')">Cụm &amp; Phrasal P5·6 (${setTot.phrases_p56})</button>
+            </div>
+
+            <div class="syn-filter-row">
+              <div class="syn-search-wrap">
+                <span class="syn-search-ico">${icon('search')}</span>
+                <input type="search" id="synSearchInput" class="syn-search-input" value="${esc(f.search || '')}" placeholder="Tìm từ gốc, đồng nghĩa, nghĩa Việt, mã đề (vd: T04, postpone, refreshments)..." oninput="ETS.setSynFilter('search', this.value)" />
+              </div>
+
+              <select class="syn-select" aria-label="Lọc chủ đề" onchange="ETS.setSynFilter('topic', this.value)">
+                <option value="ALL" ${f.topic === 'ALL' ? 'selected' : ''}>Tất cả chủ đề (${(pack.topics || []).length})</option>
+                ${(pack.topics || []).map((tp) => `<option value="${esc(tp)}" ${f.topic === tp ? 'selected' : ''}>${esc(tp)}</option>`).join('')}
+              </select>
+
+              <select class="syn-select" aria-label="Lọc Part thi" onchange="ETS.setSynFilter('part', this.value)">
+                <option value="ALL" ${f.part === 'ALL' ? 'selected' : ''}>Mọi Part (P1–P7)</option>
+                <option value="P1" ${f.part === 'P1' ? 'selected' : ''}>Part 1 (Tranh ảnh)</option>
+                <option value="P3-4" ${f.part === 'P3-4' ? 'selected' : ''}>Part 3–4 (Nghe)</option>
+                <option value="P5-6" ${f.part === 'P5-6' ? 'selected' : ''}>Part 5–6 (Điền từ)</option>
+                <option value="P7" ${f.part === 'P7' ? 'selected' : ''}>Part 7 (Đọc hiểu)</option>
+              </select>
+
+              <select class="syn-select" aria-label="Lọc mức độ" onchange="ETS.setSynFilter('tier', this.value)">
+                <option value="ALL" ${f.tier === 'ALL' ? 'selected' : ''}>Mọi mức điểm</option>
+                <option value="S" ${f.tier === 'S' ? 'selected' : ''}>Siêu hot IIG (550–800)</option>
+                <option value="A" ${f.tier === 'A' ? 'selected' : ''}>Bẫy điểm cao (800–990+)</option>
+              </select>
+
+              <select class="syn-select" aria-label="Lọc trạng thái học" onchange="ETS.setSynFilter('status', this.value)">
+                <option value="ALL" ${f.status === 'ALL' ? 'selected' : ''}>Mọi trạng thái</option>
+                <option value="UNSEEN" ${f.status === 'UNSEEN' ? 'selected' : ''}>Chưa học</option>
+                <option value="LEARNING" ${f.status === 'LEARNING' ? 'selected' : ''}>Đang ôn</option>
+                <option value="MASTERED" ${f.status === 'MASTERED' ? 'selected' : ''}>Đã thuộc</option>
+                <option value="BOOKMARKED" ${f.status === 'BOOKMARKED' ? 'selected' : ''}>Đã ghim khó ★</option>
+                <option value="SRS_DUE" ${f.status === 'SRS_DUE' ? 'selected' : ''}>Đến hạn SRS</option>
+                <option value="WRONG" ${f.status === 'WRONG' ? 'selected' : ''}>Hay sai Quiz</option>
+              </select>
+
+              <span class="badge badge-primary" id="synFilteredBadge">${filtered.length} / ${all.length} mục khớp</span>
+              ${hasActiveFilter ? `<button type="button" class="btn btn-xs" onclick="ETS.resetSynFilters()">${icon('close')} Xóa lọc</button>` : ''}
+            </div>
+          </div>
+        ` : ''}
+
+        <div id="synWorkspaceBody">${bodyHtml}</div>
+      </div>
+    `;
+  }
+
+  // Global keyboard shortcuts scoped strictly to 'synonyms' route
+  document.addEventListener('keydown', (e) => {
+    if (state.route !== 'synonyms') return;
+    if (document.getElementById('etsModal')) return;
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    const syn = ensureSynState();
+    if (syn.activeTab === 'flashcard' && fcSes && !fcSes.done) {
+      if (e.code === 'Space') { e.preventDefault(); flipSynFlashcard(); }
+      else if (e.key === 'a' || e.key === 'A') {
+        const cur = fcSes.queue[fcSes.idx];
+        if (cur) speakSynText(fcSes.dir === 'SRC_TO_ANS' ? cur.src_word : cur.primary_target);
+      } else if (fcSes.flipped && e.key === '1') { gradeSynFlashcard('again'); }
+      else if (fcSes.flipped && e.key === '2') { gradeSynFlashcard('hard'); }
+      else if (fcSes.flipped && e.key === '3') { gradeSynFlashcard('good'); }
+    } else if (syn.activeTab === 'quiz' && quizSes && !quizSes.done) {
+      if (!quizSes.picked) {
+        const map = { '1': 'A', '2': 'B', '3': 'C', '4': 'D', 'a': 'A', 'b': 'B', 'c': 'C', 'd': 'D' };
+        const lt = map[String(e.key || '').toLowerCase()];
+        if (lt) { e.preventDefault(); pickSynQuizOpt(lt); }
+      } else if (e.key === 'Enter' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        nextSynQuizQ();
+      }
+    }
+  });
+
+  if (typeof ETS.registerView === 'function') {
+    ETS.registerView('synonyms', renderSynonymsHub);
+  }
+
+  Object.assign(ETS, {
+    renderSynonymsHub,
+    stopSynonymsRuntime,
+    speakSynText,
+    setSynFilter,
+    resetSynFilters,
+    setSynTab,
+    toggleSynSources,
+    toggleSynDrillFilters,
+    toggleSynBookmark,
+    toggleSynMastered,
+    loadMoreSynMatrix,
+    startSynFlashcard,
+    flipSynFlashcard,
+    gradeSynFlashcard,
+    setSynFcDir,
+    toggleSynFcAutoSpeak,
+    retrySynFcMissed,
+    startSynQuiz,
+    pickSynQuizOpt,
+    nextSynQuizQ,
+    restartSynMatch,
+    pickSynMatch,
+    toggleSynCramMask,
+    revealSynCramRow,
+    setSynCramRate,
+    toggleSynHandsFree,
+    printSynCramSheet,
   });
 })(window.ETS);
 
