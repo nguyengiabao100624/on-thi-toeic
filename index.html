@@ -14081,22 +14081,30 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   }
 
   // ===================== LAUNCH REAL EXAM MODE =====================
-  let preExamCountdownChoice = 3;
+  const DEFAULT_EXAM_TRACK_DELAY = 0;
+  let preExamCountdownChoice = DEFAULT_EXAM_TRACK_DELAY;
+
+  function normalizeExamTrackDelay(value, fallback) {
+    if (value == null || value === '') return fallback;
+    const seconds = Number(value);
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds : fallback;
+  }
+
   function setPreExamCountdown(val) {
-    preExamCountdownChoice = Number(val) || 3;
+    preExamCountdownChoice = normalizeExamTrackDelay(val, DEFAULT_EXAM_TRACK_DELAY);
   }
 
   function openPreExamModal(testCode) {
     if (ETS.ensureTestLoaded) ETS.ensureTestLoaded(testCode);
     const m = DB.testsMeta[testCode];
-    preExamCountdownChoice = 3;
+    preExamCountdownChoice = DEFAULT_EXAM_TRACK_DELAY;
     openModal(`
       <h2 style="margin:0 0 8px;display:flex;align-items:center;gap:8px;">${icon('clock')} Chuẩn Bị Thi Thật: ${esc(m.name)}</h2>
       <p style="font-size:0.9rem;color:var(--ink-muted);margin:0 0 14px;">Chế độ mô phỏng CBT chuẩn 100% phòng thi thực tế:</p>
       <ul style="font-size:0.9rem;padding-left:20px;line-height:1.65;margin:0 0 16px;">
         <li><strong>Thời gian chuẩn 120 phút</strong> — Tự động nộp bài khi đồng hồ về <code>00:00:00</code>.</li>
         <li><strong>Listening (Q1–Q100):</strong> Hệ thống phát liền mạch <strong>54 tracks audio</strong>. Khi đã chọn xong đáp án câu/nhóm câu hiện tại, bạn có thể bấm <strong>Câu / Nhóm sau →</strong> để qua ngay mà không cần chờ hết audio, nhưng <strong>tuyệt đối KHÔNG được quay lại câu cũ</strong>.</li>
-        <li><strong>Tự động chuyển trang:</strong> Sau khi kết thúc audio mỗi câu/nhóm sẽ đếm ngược sang trang kế. Nếu bạn <strong>chưa chọn đáp án</strong>, hệ thống bật cảnh báo đỏ nhưng vẫn tự chuyển khi hết đếm ngược!</li>
+        <li><strong>Tự động chuyển trang:</strong> Chọn <strong>0 giây</strong> để chuyển ngay khi hết audio, kể cả khi chưa chọn đáp án. Với các mức chờ khác, hệ thống hiển thị đếm ngược và cảnh báo nếu còn câu trống.</li>
         <li><strong>Reading (Q101–Q200):</strong> Ngay khi xong câu 100, hệ thống <strong>MỞ KHÓA Bản đồ 100 câu Đọc (Q101–200)</strong> để bạn tự do nhảy câu tìm câu dễ làm trước (vẫn khóa chặt phần Nghe Q1–100).</li>
         <li><strong>Ẩn hoàn toàn</strong> Song ngữ, Script và Giải thích cho đến khi Nộp bài.</li>
       </ul>
@@ -14104,11 +14112,12 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         <label style="font-size:0.8667rem;font-weight:700;display:flex;align-items:center;gap:6px;margin-bottom:6px;">${icon('sliders')} Thời gian đếm ngược chuyển trang sau khi hết Audio:</label>
         ${renderCustomSelect({
           id: 'preExamCountdownSel',
-          value: '3',
+          value: String(preExamCountdownChoice),
           extraStyle: 'width:100%;',
           ariaLabel: 'Thời gian đếm ngược chuyển trang',
           options: [
-            { value: '2', label: 'Nhanh: 2 giây (đã chọn) / 4 giây (chưa chọn)' },
+            { value: '0', label: '0 giây: Chuyển ngay khi hết audio' },
+            { value: '2', label: 'Nhanh: 2 giây (đã chọn) / 5 giây (chưa chọn)' },
             { value: '3', label: 'Chuẩn: 3 giây (đã chọn) / 5 giây cảnh báo (chưa chọn)' },
             { value: '6', label: 'Thong thả: 6 giây (đã chọn) / 8 giây cảnh báo' },
           ],
@@ -14128,7 +14137,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
       ETS.ensureTestLoaded(testCode).then(() => startRealExam(testCode, countdownSec));
       return;
     }
-    const cdSec = countdownSec != null ? Number(countdownSec) : preExamCountdownChoice || 3;
+    const cdSec = normalizeExamTrackDelay(countdownSec, preExamCountdownChoice);
     closeModal();
     clearWorkspaceTimers();
     stopAllAudio();
@@ -14587,7 +14596,10 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   function formatClozeTranscriptLine(enText, lineKey, vocabArr) {
     if (!ws || !ws.clozeScript) return esc(enText);
     const words = String(enText || '').split(/(\s+)/);
-    const vocabSet = new Set((vocabArr || []).map((v) => (v.word || '').toLowerCase().split(/\s+/)[0]).filter(Boolean));
+    const vocabSet = new Set((vocabArr || []).map((v) => {
+      const w = (v && typeof v === 'object') ? (v.word || v.w || v.en || '') : String(v || '');
+      return w.toLowerCase().split(/\s+/)[0];
+    }).filter(Boolean));
     let blankCnt = 0;
     return words.map((tok, wIdx) => {
       const clean = tok.replace(/[^a-zA-Z]/g, '');
@@ -14812,6 +14824,14 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
     if (sc.part >= 5) {
       parts.push(renderPartDirectionsHtml(sc.part, sc.qStart));
+      const passageImgs = (Array.isArray(first.passageImgs) && first.passageImgs.length > 0)
+        ? first.passageImgs
+        : ((Array.isArray(first.passage_imgs) && first.passage_imgs.length > 0) ? first.passage_imgs : []);
+      const hasDocBlocks = Array.isArray(first.docBlocks) && first.docBlocks.length > 0;
+      const hasLines = Array.isArray(first.lines) && first.lines.length > 0;
+      const hasBilingualLines = hasLines && first.lines.some((ln) => ln && ((ln.vi && String(ln.vi).trim()) || (Array.isArray(ln.units) && ln.units.some((u) => u && u.vi && String(u.vi).trim()))));
+      const useNativeP7 = sc.part === 7 && ETS.renderExamDocument && ETS.linesToDocBlocks && !first.isScanBacked && (hasDocBlocks || (hasLines && (passageImgs.length === 0 || hasBilingualLines)));
+
       if (sc.part === 5 && !isExam) {
         parts.push(renderUnifiedP2P5LeftCardHtml(sc, first, gKey, hls, ansMap, checkedMap, flagsMap, keysMap));
       } else if (sc.part === 5) {
@@ -14821,35 +14841,6 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
             <h3 style="margin:0 0 6px;">Đang Thi Thật · Reading Part 5 (Câu ${first.q})</h3>
             <p style="font-size:0.9rem;color:var(--ink-muted);margin:0;">Đọc câu hỏi và chọn đáp án đúng nhất (A, B, C hoặc D) ở cột bên phải. Bạn có thể mở <strong>Bản đồ câu Đọc</strong> để tự do chuyển câu.</p>
           </div>
-        `);
-      } else if (sc.part === 7 && Array.isArray(first.passageImgs) && first.passageImgs.length > 0) {
-        parts.push(`
-          <div class="ets-refer-row">
-            <div class="ets-refer-heading" style="margin:0;">Questions ${sc.qStart}–${sc.qEnd} refer to the following ${first.passageImgs.length >= 2 ? 'passages' : 'passage'}.</div>
-            ${!isExam ? `
-              <div style="display:flex;gap:4px;flex-shrink:0;">
-                <button class="btn btn-xs btn-soft" onclick="ETS.highlightSelectedText('${escJsStr(gKey)}')" title="Bôi vàng từ đã chọn">${icon('highlighter')} <span class="hide-mob">Bôi vàng</span></button>
-                ${hls.length ? `<button class="btn btn-xs" onclick="ETS.clearHighlights('${escJsStr(gKey)}')">${icon('eraser')} (${hls.length})</button>` : ''}
-              </div>
-            ` : ''}
-          </div>
-          <div class="ets-booklet-stack">
-            ${first.passageImgs.map((u, idx) => `
-              <div class="ets-booklet-page-card">
-                <img src="${esc(u)}" alt="Passage ${idx + 1} Q${sc.qStart}-${sc.qEnd}" class="ets-booklet-page-img" onclick="ETS.openImageLightbox('${escJsStr(u)}', 'Đoạn văn Câu ${sc.qStart}–${sc.qEnd} (${escJsStr(ws.testCode)})')">
-              </div>
-            `).join('')}
-          </div>
-          ${first.lines && first.lines.length ? `
-            <details class="card" style="padding:10px 12px;margin-top:10px;" ${!isExam ? 'open' : ''}>
-              <summary style="cursor:pointer;font-size:0.82rem;font-weight:800;color:var(--primary);display:flex;align-items:center;gap:6px;">
-                ${icon('voca')} Văn bản thông minh (Bôi đen để tra từ / cụm từ &amp; bôi vàng)
-              </summary>
-              <div class="passage-box" id="wsPassageText" style="margin:8px 0 0;border:none;padding:6px 2px;">
-                ${first.lines.map((ln) => `<div class="passage-line"><span>${applyHighlightsHtml(ln.en, hls)}</span></div>`).join('')}
-              </div>
-            </details>
-          ` : ''}
         `);
       } else if (sc.part === 6 && ETS.renderPart6Document) {
         const p6Label = ETS.inferPart6DocType ? ETS.inferPart6DocType(first) : 'text';
@@ -14866,16 +14857,20 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           <div id="wsPassageText">
             ${ETS.renderPart6Document(first, items, ws.mode, ws.testCode, sc.qStart, !isExam, ansMap || {}, checkedMap || {}, false)}
           </div>
-          ${Array.isArray(first.passageImgs) && first.passageImgs.length ? `
+          ${passageImgs.length > 0 ? `
             <details class="card" style="padding:8px 12px;margin-top:10px;">
-              <summary style="cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--ink-muted);">${icon('eye')} Xem trang đoạn văn in gốc ETS</summary>
-              <div class="ets-booklet-page-card" style="margin-top:8px;">
-                <img src="${esc(first.passageImgs[0])}" alt="Part 6 Original Q${sc.qStart}-${sc.qEnd}" class="ets-booklet-page-img" onclick="ETS.openImageLightbox('${escJsStr(first.passageImgs[0])}', 'Part 6 Câu ${sc.qStart}–${sc.qEnd}')">
+              <summary style="cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--ink-muted);">${icon('eye')} Xem trang đoạn văn in gốc ETS${passageImgs.length > 1 ? ` (${passageImgs.length} trang)` : ''}</summary>
+              <div class="ets-booklet-stack" style="margin-top:8px;">
+                ${passageImgs.map((u, idx) => `
+                  <div class="ets-booklet-page-card">
+                    <img src="${esc(u)}" alt="Part 6 Original ${idx + 1} Q${sc.qStart}-${sc.qEnd}" class="ets-booklet-page-img" onclick="ETS.openImageLightbox('${escJsStr(u)}', 'Part 6 Câu ${sc.qStart}–${sc.qEnd} (${escJsStr(ws.testCode)})')">
+                  </div>
+                `).join('')}
               </div>
             </details>
           ` : ''}
         `);
-      } else if (sc.part === 7 && ETS.renderExamDocument && ETS.linesToDocBlocks) {
+      } else if (useNativeP7) {
         const docBlocks = ETS.linesToDocBlocks(first, items);
         const multiLbl = ETS.formatPart7ReferLabel
           ? ETS.formatPart7ReferLabel(docBlocks)
@@ -14893,6 +14888,58 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
           <div id="wsPassageText" style="display:flex;flex-direction:column;gap:12px;">
             ${docBlocks.map((b, dIdx) => `<div class="ets-p7-doc-wrap" data-doc-idx="${dIdx}">${ETS.renderExamDocument(b, !isExam)}</div>`).join('')}
           </div>
+          ${passageImgs.length > 0 ? `
+            <details class="card" style="padding:8px 12px;margin-top:10px;">
+              <summary style="cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--ink-muted);">${icon('eye')} Xem ảnh trang đề in gốc ETS (${passageImgs.length} trang)</summary>
+              <div class="ets-booklet-stack" style="margin-top:8px;">
+                ${passageImgs.map((u, idx) => `
+                  <div class="ets-booklet-page-card">
+                    <img src="${esc(u)}" alt="Passage ${idx + 1} Q${sc.qStart}-${sc.qEnd}" class="ets-booklet-page-img" onclick="ETS.openImageLightbox('${escJsStr(u)}', 'Đoạn văn Câu ${sc.qStart}–${sc.qEnd} (${escJsStr(ws.testCode)})')">
+                  </div>
+                `).join('')}
+              </div>
+            </details>
+          ` : ''}
+        `);
+      } else if (sc.part === 7 && passageImgs.length > 0) {
+        parts.push(`
+          <div class="ets-refer-row">
+            <div class="ets-refer-heading" style="margin:0;">Questions ${sc.qStart}–${sc.qEnd} refer to the following ${passageImgs.length >= 2 ? 'passages' : 'passage'}.</div>
+            ${!isExam ? `
+              <div style="display:flex;gap:4px;flex-shrink:0;">
+                <button class="btn btn-xs btn-soft" onclick="ETS.highlightSelectedText('${escJsStr(gKey)}')" title="Bôi vàng từ đã chọn">${icon('highlighter')} <span class="hide-mob">Bôi vàng</span></button>
+                ${hls.length ? `<button class="btn btn-xs" onclick="ETS.clearHighlights('${escJsStr(gKey)}')">${icon('eraser')} (${hls.length})</button>` : ''}
+              </div>
+            ` : ''}
+          </div>
+          <div class="ets-booklet-stack">
+            ${passageImgs.map((u, idx) => `
+              <div class="ets-booklet-page-card">
+                <img src="${esc(u)}" alt="Passage ${idx + 1} Q${sc.qStart}-${sc.qEnd}" class="ets-booklet-page-img" onclick="ETS.openImageLightbox('${escJsStr(u)}', 'Đoạn văn Câu ${sc.qStart}–${sc.qEnd} (${escJsStr(ws.testCode)})')">
+              </div>
+            `).join('')}
+          </div>
+          ${first.lines && first.lines.length ? `
+            <details class="card" style="padding:10px 12px;margin-top:10px;" ${!isExam ? 'open' : ''}>
+              <summary style="cursor:pointer;font-size:0.82rem;font-weight:800;color:var(--primary);display:flex;align-items:center;gap:6px;">
+                ${icon('voca')} Văn bản thông minh (Bôi đen để tra từ / cụm từ &amp; bôi vàng)
+              </summary>
+              <div class="passage-box" id="wsPassageText" style="margin:8px 0 0;border:none;padding:6px 2px;">
+                ${first.lines.map((ln) => Array.isArray(ln.units) && ln.units.length
+                  ? `<div class="passage-line ets-bilingual-units">${ln.units.map((u, uIdx) => `${uIdx > 0 ? ' ' : ''}<div class="ets-bilingual-unit">
+                      <div class="ets-unit-en">${uIdx === 0 && ln.speaker ? `<span class="speaker-tag">${esc(ln.speaker)}:</span>` : ''}${applyHighlightsHtml(u.en, hls)}</div>
+                      ${!isExam && u.vi ? `<div class="vi-only ets-unit-vi">${esc(u.vi)}</div>` : ''}
+                    </div>`).join('')}</div>`
+                  : `
+                    <div class="passage-line">
+                      ${ln.speaker ? `<span class="speaker-tag">${esc(ln.speaker)}:</span>` : ''}
+                      <span>${applyHighlightsHtml(ln.en, hls)}</span>
+                      ${!isExam && ln.vi ? `<div class="vi-only vi-text">${esc(ln.vi)}</div>` : ''}
+                    </div>
+                  `).join('')}
+              </div>
+            </details>
+          ` : ''}
         `);
       } else if (first.lines && first.lines.length) {
         parts.push(`
@@ -15573,7 +15620,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
         const par = node.parentElement;
         if (!par) return NodeFilter.FILTER_REJECT;
-        if (par.closest('mark.user-hl, mark.evidence-hl, button, input, textarea, select, script, style, .ets-p6-blank-slot, .opt-key, .badge')) {
+        if (par.closest('mark.user-hl, mark.evidence-hl, button, input, textarea, select, script, style, summary, .ets-p6-blank-slot, .opt-key, .badge')) {
           return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
@@ -15638,7 +15685,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
         const par = node.parentElement;
         if (!par) return NodeFilter.FILTER_REJECT;
-        if (par.closest('button, input, textarea, select, script, style, .opt-key, .speaker-tag, .ev-q-badge, .ev-q-tag, .ets-unit-vi, .ets-doc-vi-line, .vi-text, .opt-vi, .ets-table-vi-row')) {
+        if (par.closest('button, input, textarea, select, script, style, summary, .opt-key, .speaker-tag, .ev-q-badge, .ev-q-tag, .ets-unit-vi, .ets-doc-vi-line, .vi-text, .opt-vi, .ets-table-vi-row')) {
           return NodeFilter.FILTER_REJECT;
         }
         if (!allowInsideMark && par.closest('mark.evidence-hl')) {
@@ -16203,7 +16250,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
     ws.showAllEvidence = false;
     ws.showAllEvidenceGroup = null;
     const itemsArr = getTestItems(ws.testCode);
-    const rich = itemsArr[q - 1] || null;
+    const rich = (itemsArr && itemsArr[q - 1]) || null;
     const scIdx = ws.allScreens.findIndex((s) => q >= s.qStart && q <= s.qEnd);
     if (scIdx >= 0 && currentScreen() && (q < currentScreen().qStart || q > currentScreen().qEnd)) {
       const actPos = ws.activeIndices.indexOf(scIdx);
@@ -16467,6 +16514,10 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
   function handleExamTrackEnded() {
     if (!ws || ws.mode !== 'exam' || ws.lcFinished) return;
+    if (ws.countdownBase === 0) {
+      advanceExamFromListening();
+      return;
+    }
     clearInterval(countdownInterval);
     const sc = currentScreen();
     const missing = [];
@@ -16687,8 +16738,16 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   }
 
   function jumpToResultEvidence(testCode, qNum) {
-    launchTestPractice(testCode, { startQ: Number(qNum) || 1 });
-    setTimeout(() => locateQuestionEvidence(Number(qNum) || 1, true), 90);
+    const q = Number(qNum) || 1;
+    if (!getTestItems(testCode) && DB.testsMeta[testCode] && DB.testsMeta[testCode].lazyBundle && ETS.ensureTestLoaded) {
+      ETS.ensureTestLoaded(testCode).then(() => {
+        launchTestPractice(testCode, { startQ: q, _loaded: true });
+        setTimeout(() => locateQuestionEvidence(q, true), 90);
+      });
+      return;
+    }
+    launchTestPractice(testCode, { startQ: q });
+    setTimeout(() => locateQuestionEvidence(q, true), 90);
   }
 
   function renderTestResult() {
@@ -16903,7 +16962,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
         return;
       }
       if (/^(Mẹo|Tình huống|Lưu ý|Tại sao|Ghi nhớ|Dịch bằng chứng):/i.test(ln)) {
-        if (!customTipLine) customTipLine = ln.replace(/^(Mẹo|Tình huống|Lưu ý|Tại sao|Ghi nhớ):\s*/i, '').trim();
+        if (!customTipLine) customTipLine = ln.replace(/^(Mẹo|Tình huống|Lưu ý|Tại sao|Ghi nhớ|Dịch bằng chứng):\s*/i, '').trim();
         else extraInfoLines.push(ln);
         return;
       }
@@ -16933,7 +16992,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
 
     const scNow = (!opts.inResult && ws && typeof currentScreen === 'function') ? currentScreen() : null;
     const partNum = Number((rich && rich.part) || (scNow && scNow.part) || 1);
-    const hasLocate = !!(rich && partNum >= 2 && ((rich.evQuotes && rich.evQuotes.length) || (rich.lines && rich.lines.length) || rich.stem_en));
+    const hasLocate = !!(rich && partNum >= 2 && ((rich.evQuotes && rich.evQuotes.length) || (rich.evTargets && rich.evTargets.length) || rich.evidence_quote || (rich.lines && rich.lines.length) || rich.stem_en));
     const isEvOn = !opts.inResult && ws && ws.activeEvidence && ws.activeEvidence.q === Number(qNum);
     const isAllEvOn = !opts.inResult && ws && scNow && isAllEvOnForScreen(scNow);
     const hasMultiQ = !!(scNow && scNow.qEnd > scNow.qStart);
@@ -17032,7 +17091,7 @@ window.ETS = Object.assign(window.ETS || {}, (function () {
   function buildResultInspectorHtml(a, qNum) {
     const q = Number(qNum) || 1;
     const itemsArr = getTestItems(a.testCode);
-    const rich = itemsArr[q - 1] || null;
+    const rich = (itemsArr && itemsArr[q - 1]) || null;
     const keysMap = DB.answerKeys[a.testCode] || {};
     const correctAns = keysMap[q] || (rich && rich.ans) || 'A';
     const picked = (a.answers && a.answers[q]) || '';
